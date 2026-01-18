@@ -185,3 +185,56 @@ class TestSanitizeForLogging:
         result = sanitize_for_logging(text)
         # Both keys should be detected and masked
         assert "[MASKED:" in result
+
+
+class TestTruncateForLoggingEdgeCases:
+    """Additional edge case tests for truncate_for_logging."""
+
+    def test_max_length_edge_at_boundary(self) -> None:
+        """Text at boundary should handle rounding correctly."""
+        text = "a" * 100
+        result = truncate_for_logging(text, max_length=50)
+        # Should be truncated with suffix
+        assert len(result) <= 50
+        assert "truncated" in result
+
+    def test_very_long_text_with_small_available_space(self) -> None:
+        """Very long text with small max_length should truncate hard."""
+        text = "x" * 1000
+        result = truncate_for_logging(text, max_length=15)
+        assert len(result) <= 15
+        # Should be hard truncated without preview
+        assert result == "x" * 15
+
+
+class TestSanitizeForLoggingEdgeCases:
+    """Additional edge case tests for sanitize_for_logging."""
+
+    def test_multiple_anthropic_keys(self) -> None:
+        """Multiple Anthropic keys should all be masked."""
+        text = "sk-ant-key1 and sk-ant-key2"
+        result = sanitize_for_logging(text)
+        assert result.count("[MASKED:") == 2
+
+    def test_nested_patterns(self) -> None:
+        """Nested patterns should be handled correctly."""
+        text = "Bearer sk-1234567890"
+        result = sanitize_for_logging(text)
+        # Both Bearer and sk- should be detected
+        assert "[MASKED:" in result
+
+    def test_pattern_at_end_of_string(self) -> None:
+        """Pattern at end of string should be masked."""
+        text = "API key: sk-1234567890"
+        result = sanitize_for_logging(text)
+        assert "[MASKED:" in result
+        assert "1234567890" not in result
+
+    def test_very_long_key_truncation(self) -> None:
+        """Very long masked string should be truncated."""
+        # Create a very long "key" that will be masked
+        long_key = "sk-" + "x" * 200
+        result = sanitize_for_logging(long_key)
+        # Should be masked AND truncated (default max_length=100)
+        assert len(result) <= 100
+        assert "[MASKED:" in result

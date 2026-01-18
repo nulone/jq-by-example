@@ -25,7 +25,7 @@ from src.cli import (
     load_tasks,
     main,
 )
-from src.domain import Example, Task
+from src.domain import Example, Solution, Task
 
 
 class TestLoadTasksValidJSON:
@@ -1158,3 +1158,412 @@ class TestSetupLogging:
         """Verbose mode should set INFO level."""
         import logging
         _setup_logging(verbose=True, debug=False)
+
+
+class TestListTasks:
+    """Tests for _list_tasks function and --list-tasks flag."""
+
+    def test_list_tasks_function(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """_list_tasks should display tasks grouped by difficulty."""
+        from src.cli import _list_tasks
+        from src.domain import Example
+        
+        tasks = [
+            Task(
+                id="basic-task",
+                description="Extract field",
+                examples=[Example(input_data={"x": 1}, expected_output=1)],
+            ),
+            Task(
+                id="filter-task",
+                description="Filter active items",
+                examples=[Example(input_data=[1, 2], expected_output=[2])],
+            ),
+            Task(
+                id="group-task",
+                description="Group by category and aggregate",
+                examples=[Example(input_data=[], expected_output=[])],
+            ),
+        ]
+        
+        _list_tasks(tasks)
+        
+        captured = capsys.readouterr()
+        assert "Available Tasks" in captured.out
+        assert "basic-task" in captured.out
+        assert "filter-task" in captured.out
+        assert "group-task" in captured.out
+        assert "Basic" in captured.out
+        assert "Intermediate" in captured.out
+        assert "Advanced" in captured.out
+
+    def test_list_tasks_with_long_description(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """_list_tasks should truncate long descriptions."""
+        from src.cli import _list_tasks
+        from src.domain import Example
+        
+        tasks = [
+            Task(
+                id="long-desc",
+                description="A" * 100,  # Very long description
+                examples=[Example(input_data={}, expected_output={})],
+            ),
+        ]
+        
+        _list_tasks(tasks)
+        
+        captured = capsys.readouterr()
+        # Should be truncated to 60 chars + "..."
+        assert "..." in captured.out
+
+    def test_list_tasks_single_example(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """_list_tasks should handle singular 'example' correctly."""
+        from src.cli import _list_tasks
+        from src.domain import Example
+        
+        tasks = [
+            Task(
+                id="single",
+                description="Test",
+                examples=[Example(input_data={}, expected_output={})],
+            ),
+        ]
+        
+        _list_tasks(tasks)
+        
+        captured = capsys.readouterr()
+        assert "1 example" in captured.out
+        assert "1 examples" not in captured.out
+
+    def test_list_tasks_multiple_examples(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """_list_tasks should handle plural 'examples' correctly."""
+        from src.cli import _list_tasks
+        from src.domain import Example
+        
+        tasks = [
+            Task(
+                id="multiple",
+                description="Test",
+                examples=[
+                    Example(input_data={}, expected_output={}),
+                    Example(input_data={}, expected_output={}),
+                ],
+            ),
+        ]
+        
+        _list_tasks(tasks)
+        
+        captured = capsys.readouterr()
+        assert "2 examples" in captured.out
+
+
+class TestMainListTasksFlag:
+    """Tests for main() with --list-tasks flag."""
+
+    def test_list_tasks_flag_success(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """--list-tasks should display tasks and return 0."""
+        tasks_data = {
+            "tasks": [
+                {
+                    "id": "test",
+                    "description": "Test task",
+                    "examples": [{"input": {}, "expected_output": {}}],
+                }
+            ]
+        }
+        tasks_file = tmp_path / "tasks.json"
+        tasks_file.write_text(json.dumps(tasks_data))
+
+        result = main(["--list-tasks", "--tasks-file", str(tasks_file)])
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Available Tasks" in captured.out
+        assert "test" in captured.out
+
+    def test_list_tasks_with_missing_file(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """--list-tasks with missing file should return 1."""
+        result = main(["--list-tasks", "--tasks-file", "/nonexistent/file.json"])
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err
+
+    def test_list_tasks_with_invalid_json(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """--list-tasks with invalid JSON should return 1."""
+        tasks_file = tmp_path / "invalid.json"
+        tasks_file.write_text("{ invalid json")
+
+        result = main(["--list-tasks", "--tasks-file", str(tasks_file)])
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Invalid JSON" in captured.err or "json" in captured.err.lower()
+
+    def test_list_tasks_with_missing_field(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """--list-tasks with missing field should return 1."""
+        tasks_data = {"wrong_key": []}
+        tasks_file = tmp_path / "missing_field.json"
+        tasks_file.write_text(json.dumps(tasks_data))
+
+        result = main(["--list-tasks", "--tasks-file", str(tasks_file)])
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Missing field" in captured.err or "field" in captured.err.lower()
+
+
+class TestPrintSummaryTable:
+    """Tests for _print_summary_table function."""
+
+    def test_all_passed(self, capsys: pytest.CaptureFixture) -> None:
+        """Summary should show success when all tasks pass."""
+        from src.cli import _print_summary_table
+        
+        solutions = [
+            Solution(
+                task_id="task1",
+                success=True,
+                best_filter=".x",
+                best_score=1.0,
+                iterations_used=1,
+                history=[],
+            ),
+            Solution(
+                task_id="task2",
+                success=True,
+                best_filter=".y",
+                best_score=1.0,
+                iterations_used=1,
+                history=[],
+            ),
+        ]
+        
+        _print_summary_table(solutions)
+        
+        captured = capsys.readouterr()
+        assert "2/2 passed (100%)" in captured.out
+
+    def test_all_failed(self, capsys: pytest.CaptureFixture) -> None:
+        """Summary should show error when all tasks fail."""
+        from src.cli import _print_summary_table
+
+        # Need at least 2 solutions for summary table to print
+        solutions = [
+            Solution(
+                task_id="task1",
+                success=False,
+                best_filter="",
+                best_score=0.0,
+                iterations_used=1,
+                history=[],
+            ),
+            Solution(
+                task_id="task2",
+                success=False,
+                best_filter="",
+                best_score=0.0,
+                iterations_used=1,
+                history=[],
+            ),
+        ]
+
+        _print_summary_table(solutions)
+
+        captured = capsys.readouterr()
+        assert "0/2 passed (0%)" in captured.out
+
+    def test_partial_success(self, capsys: pytest.CaptureFixture) -> None:
+        """Summary should show warning when some tasks fail."""
+        from src.cli import _print_summary_table
+        
+        solutions = [
+            Solution(
+                task_id="task1",
+                success=True,
+                best_filter=".x",
+                best_score=1.0,
+                iterations_used=1,
+                history=[],
+            ),
+            Solution(
+                task_id="task2",
+                success=False,
+                best_filter="",
+                best_score=0.5,
+                iterations_used=1,
+                history=[],
+            ),
+        ]
+        
+        _print_summary_table(solutions)
+        
+        captured = capsys.readouterr()
+        assert "1/2 passed (50%)" in captured.out
+
+
+class TestFormatScore:
+    """Tests for _format_score function with different values."""
+
+    def test_format_perfect_score(self) -> None:
+        """Perfect score should be formatted."""
+        from src.cli import _format_score
+        result = _format_score(1.0)
+        assert "1.000" in result
+
+    def test_format_high_score(self) -> None:
+        """High score should be formatted."""
+        from src.cli import _format_score
+        result = _format_score(0.85)
+        assert "0.850" in result
+
+    def test_format_low_score(self) -> None:
+        """Low score should be formatted."""
+        from src.cli import _format_score
+        result = _format_score(0.25)
+        assert "0.250" in result
+
+    def test_format_zero_score(self) -> None:
+        """Zero score should be formatted."""
+        from src.cli import _format_score
+        result = _format_score(0.0)
+        assert "0.000" in result
+
+
+class TestPrintTaskResult:
+    """Tests for _print_solution function."""
+
+    def test_print_result_without_verbose(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Task result should be printed without history when not verbose."""
+        from src.cli import _print_solution
+        from src.domain import Attempt, ErrorType, ExampleResult
+        
+        solution = Solution(
+            task_id="test",
+            success=True,
+            best_filter=".x",
+            best_score=1.0,
+            iterations_used=3,
+            history=[
+                Attempt(
+                    iteration=0,
+                    filter_code=".y",
+                    aggregated_score=0.0,
+                    primary_error=ErrorType.SHAPE,
+                    example_results=[
+                        ExampleResult(
+                            expected_output=1,
+                            actual_output=None,
+                            score=0.0,
+                            error_type=ErrorType.SHAPE,
+                            feedback="Wrong",
+                        )
+                    ],
+                )
+            ],
+        )
+        
+        _print_solution(solution, verbose=False)
+        
+        captured = capsys.readouterr()
+        assert "test" in captured.out
+        assert ".x" in captured.out
+        assert "1.000" in captured.out
+        # History should NOT be shown
+        assert "History" not in captured.out
+
+    def test_print_result_with_verbose(
+        self, capsys: pytest.CaptureFixture
+    ) -> None:
+        """Task result should include history when verbose."""
+        from src.cli import _print_solution
+        from src.domain import Attempt, ErrorType, ExampleResult
+        
+        solution = Solution(
+            task_id="test",
+            success=True,
+            best_filter=".x",
+            best_score=1.0,
+            iterations_used=2,
+            history=[
+                Attempt(
+                    iteration=0,
+                    filter_code=".y",
+                    aggregated_score=0.5,
+                    primary_error=ErrorType.SHAPE,
+                    example_results=[
+                        ExampleResult(
+                            expected_output=1,
+                            actual_output=None,
+                            score=0.5,
+                            error_type=ErrorType.SHAPE,
+                            feedback="Wrong",
+                        )
+                    ],
+                ),
+                Attempt(
+                    iteration=1,
+                    filter_code=".x",
+                    aggregated_score=1.0,
+                    primary_error=ErrorType.NONE,
+                    example_results=[
+                        ExampleResult(
+                            expected_output=1,
+                            actual_output=1,
+                            score=1.0,
+                            error_type=ErrorType.NONE,
+                            feedback="",
+                        )
+                    ],
+                ),
+            ],
+        )
+        
+        _print_solution(solution, verbose=True)
+        
+        captured = capsys.readouterr()
+        # History SHOULD be shown
+        assert "History" in captured.out or "[0]" in captured.out or "[1]" in captured.out
+
+
+class TestVerboseOutput:
+    """Tests for verbose flag behavior."""
+
+    def test_parse_verbose_flag(self) -> None:
+        """Verbose flag should be parsed correctly."""
+        from src.cli import _parse_args
+        
+        args = _parse_args(["--task", "test", "--verbose"])
+        assert args.verbose is True
+
+    def test_parse_verbose_short_flag(self) -> None:
+        """Short verbose flag should be parsed correctly."""
+        from src.cli import _parse_args
+        
+        args = _parse_args(["--task", "test", "-v"])
+        assert args.verbose is True
+
+    def test_verbose_default_false(self) -> None:
+        """Verbose should default to False."""
+        from src.cli import _parse_args
+        
+        args = _parse_args(["--task", "test"])
+        assert args.verbose is False
