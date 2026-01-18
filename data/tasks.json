@@ -1,0 +1,144 @@
+{
+  "tasks": [
+    {
+      "id": "nested-field",
+      "description": "Extract the user's name from a nested object structure",
+      "examples": [
+        {
+          "input": {"user": {"name": "Alice", "age": 30}},
+          "expected_output": "Alice"
+        },
+        {
+          "input": {"user": {"name": "Bob", "email": "bob@example.com"}},
+          "expected_output": "Bob"
+        },
+        {
+          "input": {"user": {"name": "Charlie Brown", "id": 123, "active": true}},
+          "expected_output": "Charlie Brown"
+        }
+      ]
+    },
+    {
+      "id": "filter-active",
+      "description": "Filter an array to keep only objects where the 'active' field is true",
+      "examples": [
+        {
+          "input": [
+            {"id": 1, "name": "Task A", "active": true},
+            {"id": 2, "name": "Task B", "active": false},
+            {"id": 3, "name": "Task C", "active": true}
+          ],
+          "expected_output": [
+            {"id": 1, "name": "Task A", "active": true},
+            {"id": 3, "name": "Task C", "active": true}
+          ]
+        },
+        {
+          "input": [
+            {"id": 1, "active": false},
+            {"id": 2, "active": false}
+          ],
+          "expected_output": []
+        },
+        {
+          "input": [
+            {"id": 1, "active": true}
+          ],
+          "expected_output": [
+            {"id": 1, "active": true}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "extract-emails",
+      "description": "Extract all email addresses from an array of user objects, skipping users without an email or with null email",
+      "examples": [
+        {
+          "input": [
+            {"name": "Alice", "email": "alice@example.com"},
+            {"name": "Bob"},
+            {"name": "Charlie", "email": "charlie@example.com"}
+          ],
+          "expected_output": ["alice@example.com", "charlie@example.com"]
+        },
+        {
+          "input": [
+            {"name": "Alice"},
+            {"name": "Bob"}
+          ],
+          "expected_output": []
+        },
+        {
+          "input": [
+            {"name": "Alice", "email": null},
+            {"name": "Bob", "email": "bob@example.com"},
+            {"name": "Charlie", "email": "charlie@test.org"}
+          ],
+          "expected_output": ["bob@example.com", "charlie@test.org"]
+        }
+      ]
+    },
+    {
+      "id": "sum-numbers",
+      "description": "Sum only the numeric values from a mixed-type array, ignoring strings, booleans, and nulls",
+      "examples": [
+        {
+          "input": [1, "hello", 2, null, 3, true],
+          "expected_output": 6
+        },
+        {
+          "input": [10, 20, 30, 40],
+          "expected_output": 100
+        },
+        {
+          "input": ["a", "b", null, false, true],
+          "expected_output": null
+        },
+        {
+          "input": [5, "skip", 10, "ignore", 15],
+          "expected_output": 30
+        }
+      ]
+    },
+    {
+      "id": "group-count",
+      "description": "Group objects by their 'category' field and return an array of objects with the category and count of items in each group",
+      "examples": [
+        {
+          "input": [
+            {"category": "fruit", "name": "apple"},
+            {"category": "vegetable", "name": "carrot"},
+            {"category": "fruit", "name": "banana"}
+          ],
+          "expected_output": [
+            {"category": "fruit", "count": 2},
+            {"category": "vegetable", "count": 1}
+          ]
+        },
+        {
+          "input": [
+            {"category": "A", "id": 1},
+            {"category": "A", "id": 2},
+            {"category": "A", "id": 3}
+          ],
+          "expected_output": [
+            {"category": "A", "count": 3}
+          ]
+        },
+        {
+          "input": [
+            {"category": "X", "value": 10},
+            {"category": "Y", "value": 20},
+            {"category": "Z", "value": 30}
+          ],
+          "expected_output": [
+            {"category": "X", "count": 1},
+            {"category": "Y", "count": 1},
+            {"category": "Z", "count": 1}
+          ]
+        }
+      ]
+    }
+  ]
+}
