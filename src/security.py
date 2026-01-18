@@ -69,7 +69,7 @@ def mask_api_key(api_key: str) -> str:
 
     Examples:
         >>> mask_api_key("sk-1234567890abcdef")
-        'sk-1************cdef'
+        'sk-1***********cdef'
         >>> mask_api_key("short")
         's***t'
     """
