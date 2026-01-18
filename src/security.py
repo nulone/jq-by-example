@@ -112,7 +112,7 @@ def sanitize_for_logging(value: Any) -> str:
     sensitive_patterns = [
         "sk-ant-",  # Anthropic keys (more specific, check first)
         "sk-",  # OpenAI keys (less specific)
-        "Bearer ",  # Bearer tokens
+        "Bearer ",  # Bearer tokens (JWT, etc.)
     ]
 
     # Use temporary placeholders that won't match any pattern
@@ -144,11 +144,26 @@ def sanitize_for_logging(value: Any) -> str:
                 offset = start_idx + 1
                 continue
 
-            # Extract what looks like a key (alphanumeric, hyphens, underscores)
-            key_start = start_idx
+            # Extract what looks like a key
+            # For Bearer tokens: skip "Bearer " prefix and extract the actual token
+            # For API keys: include the prefix (sk-, sk-ant-, etc.)
+            is_bearer = pattern == "Bearer "
+
+            if is_bearer:
+                # For Bearer: extract token after "Bearer " (not the word itself)
+                # JWT format: xxx.yyy.zzz= (contains dots and equals)
+                key_start = start_idx + len(pattern)  # Skip "Bearer "
+            else:
+                # For API keys: extract from pattern start (includes sk-, sk-ant-, etc.)
+                key_start = start_idx
+
             key_end = key_start
             for i in range(key_start, len(value_str)):
-                if value_str[i].isalnum() or value_str[i] in "-_":
+                char = value_str[i]
+                if char.isalnum() or char in "-_":
+                    key_end = i + 1
+                elif is_bearer and char in ".=":
+                    # JWT tokens contain dots and equals
                     key_end = i + 1
                 else:
                     break

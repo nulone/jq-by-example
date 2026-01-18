@@ -831,3 +831,151 @@ class TestEdgeCases:
 
         # .name returns null for third example which matches expected None
         assert solution.success is True
+
+
+class TestFilterNormalization:
+    """Regression tests for filter normalization with string literals."""
+
+    def test_normalize_preserves_spaces_in_strings(self) -> None:
+        """Spaces inside string literals should be preserved."""
+        from src.orchestrator import Orchestrator
+        from unittest.mock import MagicMock
+        
+        orch = Orchestrator(
+            generator=MagicMock(),
+            reviewer=MagicMock(),
+            max_iterations=10
+        )
+        
+        # Filters with different string content are different
+        filter1 = '.[] | select(.x == "a b")'
+        filter2 = '.[] | select(.x == "ab")'
+        
+        norm1 = orch._normalize(filter1)
+        norm2 = orch._normalize(filter2)
+        
+        # These should be DIFFERENT
+        assert norm1 != norm2
+        assert '"a b"' in norm1
+        assert '"ab"' in norm2
+
+    def test_normalize_removes_spaces_outside_strings(self) -> None:
+        """Spaces outside string literals should be removed."""
+        from src.orchestrator import Orchestrator
+        from unittest.mock import MagicMock
+        
+        orch = Orchestrator(
+            generator=MagicMock(),
+            reviewer=MagicMock(),
+            max_iterations=10
+        )
+        
+        # Same filter with different whitespace
+        filter1 = '.x|select(.y=="test")'
+        filter2 = '. x | select( .y == "test" )'
+        
+        norm1 = orch._normalize(filter1)
+        norm2 = orch._normalize(filter2)
+        
+        # These should be SAME
+        assert norm1 == norm2
+        assert norm1 == '.x|select(.y=="test")'
+
+    def test_normalize_handles_escaped_quotes(self) -> None:
+        """Escaped quotes inside strings should be handled correctly."""
+        from src.orchestrator import Orchestrator
+        from unittest.mock import MagicMock
+        
+        orch = Orchestrator(
+            generator=MagicMock(),
+            reviewer=MagicMock(),
+            max_iterations=10
+        )
+        
+        filter1 = '.x == "\\"quoted\\""'
+        filter2 = '.x=="\\\"quoted\\\""'
+        
+        norm1 = orch._normalize(filter1)
+        norm2 = orch._normalize(filter2)
+        
+        # These should be SAME (different spacing, same escapes)
+        assert norm1 == norm2
+
+    def test_normalize_space_in_concatenation(self) -> None:
+        """Space character in string concatenation should be preserved."""
+        from src.orchestrator import Orchestrator
+        from unittest.mock import MagicMock
+        
+        orch = Orchestrator(
+            generator=MagicMock(),
+            reviewer=MagicMock(),
+            max_iterations=10
+        )
+        
+        # Different: one has space in string, other doesn't
+        filter1 = '.x + " " + .y'
+        filter2 = '.x+""+.y'
+        
+        norm1 = orch._normalize(filter1)
+        norm2 = orch._normalize(filter2)
+        
+        # These should be DIFFERENT
+        assert norm1 != norm2
+        assert '" "' in norm1
+        assert '""' in norm2
+
+    def test_normalize_complex_nested_strings(self) -> None:
+        """Complex filters with multiple strings should preserve content."""
+        from src.orchestrator import Orchestrator
+        from unittest.mock import MagicMock
+        
+        orch = Orchestrator(
+            generator=MagicMock(),
+            reviewer=MagicMock(),
+            max_iterations=10
+        )
+        
+        filter_code = '.[] | select(.name == "John Doe" and .city == "New York")'
+        normalized = orch._normalize(filter_code)
+        
+        # String contents should be preserved
+        assert '"John Doe"' in normalized
+        assert '"New York"' in normalized
+        # Spaces outside strings should be removed
+        assert ' and ' not in normalized
+        assert 'and' in normalized
+
+    def test_normalize_empty_filter(self) -> None:
+        """Empty filter should return empty string."""
+        from src.orchestrator import Orchestrator
+        from unittest.mock import MagicMock
+        
+        orch = Orchestrator(
+            generator=MagicMock(),
+            reviewer=MagicMock(),
+            max_iterations=10
+        )
+        
+        assert orch._normalize("") == ""
+        assert orch._normalize("   ") == ""
+
+    def test_normalize_filter_without_strings(self) -> None:
+        """Filter without string literals should have all spaces removed."""
+        from src.orchestrator import Orchestrator
+        from unittest.mock import MagicMock
+        
+        orch = Orchestrator(
+            generator=MagicMock(),
+            reviewer=MagicMock(),
+            max_iterations=10
+        )
+        
+        filter1 = '. [] | . x | . y'
+        filter2 = '.[]|.x|.y'
+        
+        norm1 = orch._normalize(filter1)
+        norm2 = orch._normalize(filter2)
+        
+        # Should be same
+        assert norm1 == norm2
+        assert norm1 == '.[]|.x|.y'

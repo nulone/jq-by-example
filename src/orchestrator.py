@@ -257,14 +257,50 @@ class Orchestrator:
         """
         Normalize a filter code for duplicate detection.
 
-        Normalization involves removing all whitespace while preserving case.
+        Normalization removes whitespace OUTSIDE of string literals, while preserving:
+        - String literal contents (spaces in "a b" are kept)
+        - Case sensitivity of jq field names
+
         This allows detecting semantically identical filters like '.foo' and '. foo'
-        while respecting case-sensitivity of jq field names.
+        while treating '.x == "a b"' and '.x == "ab"' as different filters.
 
         Args:
             filter_code: The filter code to normalize.
 
         Returns:
             Normalized filter string for comparison.
+
+        Examples:
+            >>> _normalize('.  x')
+            '.x'
+            >>> _normalize('.x == "a b"')
+            '.x=="a b"'  # Space in string literal preserved
         """
-        return "".join(filter_code.split())
+        result = []
+        in_string = False
+        escape_next = False
+
+        for char in filter_code:
+            if escape_next:
+                result.append(char)
+                escape_next = False
+                continue
+
+            if char == '\\':
+                result.append(char)
+                escape_next = True
+                continue
+
+            if char == '"':
+                in_string = not in_string
+                result.append(char)
+                continue
+
+            if in_string:
+                # Inside string literal - preserve everything including spaces
+                result.append(char)
+            elif not char.isspace():
+                # Outside string literal - skip whitespace
+                result.append(char)
+
+        return "".join(result)

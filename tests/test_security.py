@@ -128,11 +128,13 @@ class TestSanitizeForLogging:
         assert "1234567890" not in result
 
     def test_bearer_token_masked(self) -> None:
-        """Bearer token should be masked."""
+        """Bearer token should be masked (token after 'Bearer ', not the word itself)."""
         result = sanitize_for_logging("Bearer token123456")
         assert "[MASKED:" in result
-        # The pattern "Bearer " matches, so we should see masked version
-        assert "B****r" in result or "[MASKED:Bearer" in result
+        # Word "Bearer" should remain visible
+        assert "Bearer" in result
+        # Token should be masked
+        assert "token123456" not in result or "toke***" in result
 
     def test_multiple_keys_masked(self) -> None:
         """Multiple API keys should all be masked."""
@@ -238,3 +240,78 @@ class TestSanitizeForLoggingEdgeCases:
         # Should be masked AND truncated (default max_length=100)
         assert len(result) <= 100
         assert "[MASKED:" in result
+
+
+class TestBearerTokenMasking:
+    """Regression tests for Bearer token masking with dots and equals."""
+
+    def test_bearer_jwt_token_full(self) -> None:
+        """Full JWT token should be masked including dots and equals."""
+        # Real JWT format: header.payload.signature
+        jwt = "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U"
+        result = sanitize_for_logging(jwt)
+        
+        # Token should be masked
+        assert "[MASKED:" in result
+        # JWT parts should not be visible
+        assert "eyJhbGci" not in result
+        assert "eyJzdWI" not in result
+        assert "dozjgN" not in result or "dozj***" in result  # May be partially visible in mask
+
+    def test_bearer_token_with_dots(self) -> None:
+        """Bearer token with dots should have dots included in mask."""
+        text = "Bearer abc.def.ghi"
+        result = sanitize_for_logging(text)
+        
+        assert "[MASKED:" in result
+        # Full token including dots should be masked
+        assert "abc.def.ghi" not in result
+        # Word "Bearer" should remain
+        assert "Bearer" in result
+
+    def test_bearer_token_with_equals(self) -> None:
+        """Bearer token with equals signs should include them in mask."""
+        text = "Bearer token123=="
+        result = sanitize_for_logging(text)
+        
+        assert "[MASKED:" in result
+        # Token including equals should be masked
+        assert "token123==" not in result
+        assert "Bearer" in result
+
+    def test_bearer_token_mixed_chars(self) -> None:
+        """Bearer token with alphanumeric, dots, equals, hyphens, underscores."""
+        text = "Bearer abc-def_ghi.jkl==mno"
+        result = sanitize_for_logging(text)
+        
+        assert "[MASKED:" in result
+        # All characters should be captured
+        assert "abc-def_ghi.jkl==mno" not in result
+
+    def test_multiple_bearer_tokens(self) -> None:
+        """Multiple Bearer tokens should all be masked."""
+        text = "Token1: Bearer abc.def.ghi Token2: Bearer xyz.uvw.rst"
+        result = sanitize_for_logging(text)
+        
+        assert result.count("[MASKED:") == 2
+        assert "abc.def.ghi" not in result
+        assert "xyz.uvw.rst" not in result
+
+    def test_bearer_word_not_masked(self) -> None:
+        """The word 'Bearer' itself should not be masked, only the token after it."""
+        text = "Authorization: Bearer token123"
+        result = sanitize_for_logging(text)
+        
+        # Word "Bearer" should still be visible
+        assert "Bearer" in result
+        # But token should be masked
+        assert "[MASKED:" in result
+        assert "token123" not in result
+
+    def test_bearer_without_token(self) -> None:
+        """Bearer without a token should not cause issues."""
+        text = "Bearer "
+        result = sanitize_for_logging(text)
+        
+        # Should not crash, just return as-is
+        assert "Bearer" in result
