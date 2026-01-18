@@ -173,10 +173,17 @@ class AlgorithmicReviewer:
             stdout: The stdout from jq execution.
 
         Returns:
-            Parsed JSON value, or None if parsing fails.
+            Parsed JSON value, or _PARSE_ERROR sentinel if parsing fails.
+
+        Note:
+            Empty stdout is treated as a parse error because jq filters like 'empty'
+            produce no output, which is semantically different from outputting 'null'.
+            A filter that outputs null will produce stdout='null', which parses to None.
         """
         stdout = stdout.strip()
 
+        # Empty output is an error - jq should output at least 'null' if that's intended
+        # Filters like 'empty' or 'select(false)' produce no output, which should fail
         if not stdout:
             return _PARSE_ERROR
 
@@ -348,7 +355,7 @@ class AlgorithmicReviewer:
         # Calculate value score (for matching keys, how many values match)
         if key_intersection:
             matching_values = sum(1 for k in key_intersection if actual[k] == expected[k])
-            value_score = matching_values / len(key_union)
+            value_score = matching_values / len(key_intersection)
         else:
             value_score = 0.0
 
