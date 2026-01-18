@@ -52,9 +52,9 @@ pip install -e .
 
 | Provider | Status | Note |
 |----------|--------|------|
-| OpenAI | Stable ✅ | Default, tested |
-| Anthropic | Beta ⚠️ | May have edge cases |
-| OpenRouter | Beta ⚠️ | Via OpenAI-compatible endpoint |
+| OpenAI | Stable ✅ | Default provider |
+| Anthropic | Beta ⚠️ | Different API format |
+| OpenRouter | Tested ✅ | OpenAI-compatible |
 | Ollama | Alpha 🧪 | Local only, requires setup |
 
 > Note: OpenAI is default and most tested. Others should work but report issues if found.
