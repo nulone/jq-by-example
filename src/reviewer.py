@@ -9,7 +9,7 @@ to provide actionable feedback for the LLM generator.
 import json
 import logging
 from collections import Counter
-from typing import Any
+from typing import Any, ClassVar
 
 from src.domain import Attempt, ErrorType, ExampleResult, Task
 from src.executor import ExecutionResult, JQExecutor
@@ -39,7 +39,7 @@ class AlgorithmicReviewer:
     """
 
     # Error type priority for selecting primary error (higher index = higher priority)
-    _ERROR_PRIORITY: dict[ErrorType, int] = {
+    _ERROR_PRIORITY: ClassVar[dict[ErrorType, int]] = {
         ErrorType.NONE: 0,
         ErrorType.ORDER: 1,
         ErrorType.MISSING_EXTRA: 2,

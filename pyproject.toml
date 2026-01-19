@@ -56,6 +56,8 @@ include = ["src*"]
 target-version = "py310"
 line-length = 100
 src = ["src", "tests"]
+
+[tool.ruff.lint]
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings
@@ -94,7 +96,7 @@ ignore = [
     "ERA001",   # Commented-out code (useful for documentation in tests)
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["src"]
 
 [tool.mypy]
