@@ -79,6 +79,7 @@ ignore = [
     "PLR0912",  # Too many branches (ok for our code)
     "PLR0915",  # Too many statements (ok for our code)
     "PLW2901",  # Loop variable overwritten (intentional in some cases)
+    "PLC0415",  # Import should be at top-level (ok in test fixtures)
     "ARG001",   # Unused function argument (normal in tests)
     "ARG002",   # Unused method argument (normal in tests)
     "E402",     # Module level import not at top of file (normal in scripts)
