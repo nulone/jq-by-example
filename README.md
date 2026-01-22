@@ -7,6 +7,7 @@ JQ-By-Example automatically generates [jq](https://stedolan.github.io/jq/) filte
 [![CI](https://github.com/nulone/jq-by-example/actions/workflows/ci.yml/badge.svg)](https://github.com/nulone/jq-by-example/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nulone/jq-by-example/blob/main/demo.ipynb)
 
 ![Demo](demo.gif)
 
