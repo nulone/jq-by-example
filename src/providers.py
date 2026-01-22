@@ -102,9 +102,7 @@ class OpenAIProvider(LLMProvider):
         self.model = model or os.environ.get("LLM_MODEL") or self.DEFAULT_MODEL
 
         # Resolve base URL
-        self.base_url = (
-            base_url or os.environ.get("LLM_BASE_URL") or "https://api.openai.com/v1"
-        )
+        self.base_url = base_url or os.environ.get("LLM_BASE_URL") or "https://api.openai.com/v1"
 
         # Ensure base_url ends with /v1 for compatibility
         if not self.base_url.endswith("/v1"):

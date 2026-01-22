@@ -195,7 +195,7 @@ class JQGenerator:
             httpx.RequestError: If the request fails after retries.
             GenerationError: If the response format is invalid.
         """
-        last_error = None
+        last_error: httpx.RequestError | None = None
 
         for attempt in range(self.MAX_RETRIES):
             try:
@@ -206,7 +206,10 @@ class JQGenerator:
                 error_msg = str(e)
 
                 # Provide helpful error messages for common connection issues
-                if "nodename nor servname provided" in error_msg or "Name or service not known" in error_msg:
+                if (
+                    "nodename nor servname provided" in error_msg
+                    or "Name or service not known" in error_msg
+                ):
                     logger.warning(
                         "DNS resolution failed (attempt %d/%d). "
                         "Verify the endpoint URL or set LLM_BASE_URL environment variable.",
@@ -241,7 +244,10 @@ class JQGenerator:
         # All retries exhausted
         if isinstance(last_error, httpx.ConnectError):
             error_msg = str(last_error)
-            if "nodename nor servname provided" in error_msg or "Name or service not known" in error_msg:
+            if (
+                "nodename nor servname provided" in error_msg
+                or "Name or service not known" in error_msg
+            ):
                 raise GenerationError(
                     "DNS resolution failed. Please verify the endpoint URL is correct "
                     "or set LLM_BASE_URL environment variable to the correct endpoint."
@@ -283,6 +289,19 @@ class JQGenerator:
         lines = text.split("\n")
         code_lines: list[str] = []
 
+        # Patterns for intro lines to skip (when they're on their own line)
+        skip_prefixes = (
+            "here is the filter:",
+            "here is the jq filter:",
+            "the filter is:",
+            "the jq filter is:",
+            "filter:",
+            "jq filter:",
+        )
+
+        # Patterns that indicate explanatory text (stop processing)
+        explanation_starters = ("this ", "the ")
+
         for line in lines:
             line = line.strip()
 
@@ -294,9 +313,27 @@ class JQGenerator:
             if line.startswith("#"):
                 break
 
-            # Stop at lines that look like explanations
-            if line.startswith("This ") or line.startswith("The "):
+            line_lower = line.lower()
+
+            # Stop at lines that look like explanations (unless they're our known filter prefixes)
+            is_filter_prefix = any(line_lower.startswith(p) for p in skip_prefixes)
+            is_explanation = any(line_lower.startswith(p) for p in explanation_starters)
+
+            if is_explanation and not is_filter_prefix:
+                # Line starts with "This " or "The " but not a known filter prefix
                 break
+
+            # Skip lines that are ONLY intro text (no filter content)
+            is_intro_only = False
+            for prefix in skip_prefixes:
+                if line_lower.startswith(prefix):
+                    remainder = line[len(prefix) :].strip()
+                    if not remainder:
+                        is_intro_only = True
+                        break
+
+            if is_intro_only:
+                continue
 
             code_lines.append(line)
 
@@ -306,9 +343,22 @@ class JQGenerator:
         else:
             text = response.strip()
 
-        # Remove 'jq ' prefix (case insensitive)
-        if text.lower().startswith("jq "):
-            text = text[3:]
+        # Remove common introductory phrases (case insensitive)
+        text_lower = text.lower()
+        prefixes_to_remove = [
+            "here is the filter:",
+            "here is the jq filter:",
+            "the filter is:",
+            "the jq filter is:",
+            "filter:",
+            "jq filter:",
+            "jq ",
+        ]
+
+        for prefix in prefixes_to_remove:
+            if text_lower.startswith(prefix):
+                text = text[len(prefix) :].strip()
+                break  # Only remove one prefix
 
         # Strip outer quotes (both single and double)
         if len(text) >= 2:

@@ -133,9 +133,7 @@ class TestNestedFieldTask:
 
         assert result.is_success, f"Filter failed on new input: {result.stderr}"
         # The output should be "Diana" (quoted in JSON)
-        assert result.stdout.strip('"') == "Diana", (
-            f"Expected 'Diana', got {result.stdout}"
-        )
+        assert result.stdout.strip('"') == "Diana", f"Expected 'Diana', got {result.stdout}"
 
 
 @pytest.mark.e2e
@@ -236,9 +234,7 @@ class TestFilterActiveTask:
         result = executor.run(solution.best_filter, [])
 
         assert result.is_success, f"Filter failed on empty array: {result.stderr}"
-        assert result.stdout == "[]", (
-            f"Expected '[]' for empty input, got {result.stdout}"
-        )
+        assert result.stdout == "[]", f"Expected '[]' for empty input, got {result.stdout}"
 
 
 @pytest.mark.e2e

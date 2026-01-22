@@ -1,16 +1,18 @@
-# JQ-Synth
+# JQ-By-Example
 
 **AI-Powered JQ Filter Synthesis Tool**
 
-JQ-Synth automatically generates [jq](https://stedolan.github.io/jq/) filter expressions from input/output JSON examples using LLM-powered synthesis with iterative refinement.
+JQ-By-Example automatically generates [jq](https://stedolan.github.io/jq/) filter expressions from input/output JSON examples using LLM-powered synthesis with iterative refinement.
 
-[![CI](https://github.com/nulone/jq-synth/actions/workflows/ci.yml/badge.svg)](https://github.com/nulone/jq-synth/actions/workflows/ci.yml)
+[![CI](https://github.com/nulone/jq-by-example/actions/workflows/ci.yml/badge.svg)](https://github.com/nulone/jq-by-example/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+![Demo](demo.gif)
+
 ## Overview
 
-JQ-Synth solves a common developer problem: you know what JSON transformation you want, but writing the correct jq filter is tricky. Simply provide example input/output pairs, and JQ-Synth will synthesize the filter for you.
+JQ-By-Example solves a common developer problem: you know what JSON transformation you want, but writing the correct jq filter is tricky. Simply provide example input/output pairs, and JQ-By-Example will synthesize the filter for you.
 
 **Key Features:**
 
@@ -38,72 +40,14 @@ JQ-Synth solves a common developer problem: you know what JSON transformation yo
    choco install jq
    ```
 
-### Install JQ-Synth
+### Install JQ-By-Example
 
 ```bash
-git clone https://github.com/nulone/jq-synth.git
-cd jq-synth
+git clone https://github.com/nulone/jq-by-example.git
+cd jq-by-example
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e .
-```
-
-## Supported Providers
-
-| Provider | Status | Note |
-|----------|--------|------|
-| OpenAI | Stable ✅ | Default, tested |
-| Anthropic | Beta ⚠️ | May have edge cases |
-| OpenRouter | Beta ⚠️ | Via OpenAI-compatible endpoint |
-| Ollama | Alpha 🧪 | Local only, requires setup |
-
-> Note: OpenAI is default and most tested. Others should work but report issues if found.
-
-### Provider Setup
-
-**OpenAI (Default)**
-
-```bash
-export OPENAI_API_KEY='sk-...'
-# Optional: specify model (default: gpt-4o)
-export LLM_MODEL='gpt-4o'
-```
-
-**Anthropic**
-
-```bash
-export LLM_PROVIDER='anthropic'
-export ANTHROPIC_API_KEY='sk-ant-...'
-# Optional: specify model (default: claude-sonnet-4-20250514)
-export LLM_MODEL='claude-sonnet-4-20250514'
-```
-
-**OpenRouter**
-
-```bash
-export LLM_BASE_URL='https://openrouter.ai/api/v1'
-export OPENAI_API_KEY='sk-or-...'
-export LLM_MODEL='anthropic/claude-3.5-sonnet'
-```
-
-**Local (Ollama)**
-
-```bash
-export LLM_BASE_URL='http://localhost:11434/v1'
-export LLM_MODEL='llama3'
-export OPENAI_API_KEY='dummy'  # Ollama doesn't require a real key
-```
-
-**Together AI / Groq**
-
-```bash
-# Together AI
-export LLM_BASE_URL='https://api.together.xyz/v1'
-export OPENAI_API_KEY='...'
-
-# Groq
-export LLM_BASE_URL='https://api.groq.com/openai/v1'
-export OPENAI_API_KEY='gsk_...'
 ```
 
 ## Quick Start
@@ -113,7 +57,7 @@ export OPENAI_API_KEY='gsk_...'
 Synthesize a filter from a single input/output example:
 
 ```bash
-jq-synth \
+jq-by-example \
   --input '{"user": {"name": "Alice", "age": 30}}' \
   --output '"Alice"' \
   --desc "Extract the user's name"
@@ -149,19 +93,19 @@ Run predefined tasks from a file:
 
 ```bash
 # Run a specific task
-jq-synth --task nested-field
+jq-by-example --task nested-field
 
 # Run all tasks
-jq-synth --task all
+jq-by-example --task all
 
 # With verbose output (shows iteration details)
-jq-synth --task all --verbose
+jq-by-example --task all --verbose
 ```
 
 ## CLI Options
 
 ```
-usage: jq-synth [-h] [-t TASK] [--tasks-file TASKS_FILE] [--max-iters MAX_ITERS]
+usage: jq-by-example [-h] [-t TASK] [--tasks-file TASKS_FILE] [--max-iters MAX_ITERS]
                 [--baseline] [-i INPUT] [-o OUTPUT] [-d DESC]
                 [--provider {openai,anthropic}] [--model MODEL] [--base-url BASE_URL]
                 [-v] [--debug]
@@ -203,51 +147,64 @@ Output Control:
 
 ```bash
 # Interactive mode - simple field extraction
-jq-synth -i '{"x": 42}' -o '42' -d 'Extract x'
+jq-by-example -i '{"x": 42}' -o '42' -d 'Extract x'
 
 # Interactive mode - array filtering
-jq-synth -i '[1,2,3,4,5]' -o '[2,4]' -d 'Keep only even numbers'
+jq-by-example -i '[1,2,3,4,5]' -o '[2,4]' -d 'Keep only even numbers'
 
 # Interactive mode - nested object access
-jq-synth \
+jq-by-example \
   -i '{"data": {"users": [{"name": "Alice"}]}}' \
   -o '["Alice"]' \
   -d 'Extract all user names'
 
 # Batch mode - run specific task
-jq-synth --task nested-field
+jq-by-example --task nested-field
 
 # Batch mode - all tasks with verbose output
-jq-synth --task all --verbose
+jq-by-example --task all --verbose
 
 # Single-shot mode (no refinement) for baseline comparison
-jq-synth --task nested-field --baseline
+jq-by-example --task nested-field --baseline
 
 # Custom tasks file
-jq-synth --task my-task --tasks-file my-tasks.json
+jq-by-example --task my-task --tasks-file my-tasks.json
 
 # Debug mode for troubleshooting
-jq-synth --task nested-field --debug
+jq-by-example --task nested-field --debug
 
 # Limit iterations
-jq-synth --task filter-active --max-iters 5
+jq-by-example --task filter-active --max-iters 5
 
 # Use Anthropic provider
-jq-synth --provider anthropic --task nested-field
+jq-by-example --provider anthropic --task nested-field
 
 # Use specific model
-jq-synth --model gpt-4o-mini --task nested-field
+jq-by-example --model gpt-4o-mini --task nested-field
 
 # Use OpenRouter
-jq-synth --base-url https://openrouter.ai/api/v1 --model anthropic/claude-3.5-sonnet --task nested-field
+jq-by-example --base-url https://openrouter.ai/api/v1 --model anthropic/claude-3.5-sonnet --task nested-field
 
 # Use local Ollama
-jq-synth --base-url http://localhost:11434/v1 --model llama3 --task nested-field
+jq-by-example --base-url http://localhost:11434/v1 --model llama3 --task nested-field
 ```
+
+## How It Works
+
+JQ-By-Example uses a **deterministic oracle** approach:
+
+1. **Generation**: An LLM (GPT-4, Claude, or compatible model) generates candidate jq filters based on your examples and description
+2. **Verification**: Each filter is executed against the real jq binary with your input examples
+3. **Scoring**: A deterministic algorithm compares actual vs expected outputs, computing similarity scores (0.0 to 1.0)
+4. **Feedback**: The algorithm classifies errors (syntax, shape, missing/extra elements, order) and generates actionable feedback
+5. **Refinement**: The LLM receives the feedback and generates an improved filter
+6. **Iteration**: Steps 2-5 repeat until a perfect match is found or limits are reached
+
+This hybrid approach combines LLM creativity with deterministic verification, ensuring correctness while leveraging AI for filter synthesis.
 
 ## Architecture
 
-JQ-Synth follows a modular architecture with clear separation of concerns:
+JQ-By-Example follows a modular architecture with clear separation of concerns:
 
 ```
 ┌──────────┐
@@ -349,6 +306,104 @@ The reviewer classifies errors by priority (highest to lowest):
 - **Scalars**: Binary (1.0 for exact match, 0.0 for mismatch)
 - **Multiple examples**: Arithmetic mean of scores
 
+## Supported jq Patterns
+
+JQ-By-Example works well with these common jq operations:
+
+- **Field extraction**: `.foo`, `.user.name`, `.data.items[0]`
+- **Array operations**: `.[]`, `.[0]`, `.[1:3]`, `.[-1]`
+- **Filtering**: `select(.active == true)`, `select(.age > 18)`
+- **Mapping**: `map(.name)`, `[.[] | .id]`
+- **Array construction**: `[.items[].name]`
+- **Object construction**: `{name: .user.name, email: .user.email}`
+- **Conditionals**: `if .status == "active" then .name else null end`
+- **Null handling**: `select(. != null)`, `.field // "default"`
+- **String operations**: String interpolation, concatenation
+- **Arithmetic**: Addition, subtraction, comparison operators
+- **Type checking**: `type`, `length`
+
+## Known Limitations
+
+JQ-By-Example may struggle with these advanced jq features:
+
+- **Aggregations**: `group_by()`, `reduce`, `min_by()`, `max_by()`
+- **Complex recursion**: `recurse()`, `walk()`
+- **Variable bindings**: Complex `as $var` patterns
+- **Custom functions**: `def` statements (blocked for security)
+- **Advanced array operations**: `combinations()`, `transpose()`
+- **Path manipulation**: `getpath()`, `setpath()`, `delpaths()`
+- **Format strings**: `@csv`, `@json`, `@base64`
+
+For these cases, you may need to write the filter manually or break down the task into simpler steps.
+
+## Model recommendations
+
+| Task complexity | Recommended model | Speed |
+|-----------------|-------------------|-------|
+| Simple filters (extract, select) | GPT-4o-mini, Claude Haiku | Fast |
+| Medium (grouping, aggregation, recursion) | Claude Sonnet, GPT-4o | Fast |
+| Complex algorithms (graph traversal, sorting) | DeepSeek R1 | Slow (minutes) |
+
+> Note: DeepSeek R1 solved topological sort and Dijkstra's shortest path in jq. Most users won't need this — standard models handle 95%+ of real-world tasks.
+
+## Supported Providers
+
+| Provider | Status | Note |
+|----------|--------|------|
+| OpenAI | Stable ✅ | Default provider |
+| Anthropic | Beta ⚠️ | Different API format |
+| OpenRouter | Tested ✅ | OpenAI-compatible |
+| Ollama | Alpha 🧪 | Local only, requires setup |
+
+> Note: OpenAI is default and most tested. Others should work but report issues if found.
+
+### Provider Setup
+
+**OpenAI (Default)**
+
+```bash
+export OPENAI_API_KEY='sk-...'
+# Optional: specify model (default: gpt-4o)
+export LLM_MODEL='gpt-4o'
+```
+
+**Anthropic**
+
+```bash
+export LLM_PROVIDER='anthropic'
+export ANTHROPIC_API_KEY='sk-ant-...'
+# Optional: specify model (default: claude-sonnet-4-20250514)
+export LLM_MODEL='claude-sonnet-4-20250514'
+```
+
+**OpenRouter**
+
+```bash
+export LLM_BASE_URL='https://openrouter.ai/api/v1'
+export OPENAI_API_KEY='sk-or-...'
+export LLM_MODEL='anthropic/claude-3.5-sonnet'
+```
+
+**Local (Ollama)**
+
+```bash
+export LLM_BASE_URL='http://localhost:11434/v1'
+export LLM_MODEL='llama3'
+export OPENAI_API_KEY='dummy'  # Ollama doesn't require a real key
+```
+
+**Together AI / Groq**
+
+```bash
+# Together AI
+export LLM_BASE_URL='https://api.together.xyz/v1'
+export OPENAI_API_KEY='...'
+
+# Groq
+export LLM_BASE_URL='https://api.groq.com/openai/v1'
+export OPENAI_API_KEY='gsk_...'
+```
+
 ## Task File Format
 
 Tasks are defined in JSON format:
@@ -396,7 +451,7 @@ The `data/tasks.json` file includes these example tasks:
 
 ### "jq binary not found"
 
-**Problem**: JQ-Synth can't locate the jq executable.
+**Problem**: JQ-By-Example can't locate the jq executable.
 
 **Solution**: Ensure jq is installed and in your PATH:
 
@@ -480,11 +535,11 @@ source ~/.bashrc
 2. Check your firewall/proxy settings
 3. Try with `--debug` flag to see detailed error messages
 
-### Filter works in jq but not in JQ-Synth
+### Filter works in jq but not in JQ-By-Example
 
-**Problem**: Your filter works when you run it manually with jq, but fails in JQ-Synth.
+**Problem**: Your filter works when you run it manually with jq, but fails in JQ-By-Example.
 
-**Cause**: JQ-Synth uses these jq flags: `-M` (monochrome) and `-c` (compact output).
+**Cause**: JQ-By-Example uses these jq flags: `-M` (monochrome) and `-c` (compact output).
 
 **Solution**: Ensure your expected output matches compact JSON format:
 ```bash
@@ -513,7 +568,7 @@ source ~/.bashrc
 Enable debug logging to see detailed internal state:
 
 ```bash
-jq-synth --task my-task --debug
+jq-by-example --task my-task --debug
 ```
 
 Debug mode shows:
@@ -524,7 +579,7 @@ Debug mode shows:
 
 ## Security
 
-JQ-Synth implements production-ready security measures:
+JQ-By-Example implements production-ready security measures:
 
 ### API Key Protection
 - API keys are **never logged** (even in debug mode)
@@ -559,8 +614,8 @@ Comprehensive test coverage for:
 ### Setup Development Environment
 
 ```bash
-git clone https://github.com/nulone/jq-synth.git
-cd jq-synth
+git clone https://github.com/nulone/jq-by-example.git
+cd jq-by-example
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
@@ -604,10 +659,10 @@ mypy src && \
 pytest -m "not e2e"
 ```
 
-### Project Structure
+## Project Structure
 
 ```
-jq-synth/
+jq-by-example/
 ├── src/
 │   ├── cli.py           # CLI entry point
 │   ├── orchestrator.py  # Synthesis loop coordinator
@@ -650,7 +705,7 @@ Contributions are welcome! Please follow these steps:
 6. **Push** to your fork: `git push origin feature/my-feature`
 7. **Open** a Pull Request
 
-### Code Style
+## Code Style
 
 - Type hints required for all public functions
 - Docstrings required for all public functions and classes (Google style)
@@ -669,49 +724,6 @@ MIT License - see [LICENSE](LICENSE) for details.
 - [OpenAI](https://openai.com) - GPT models and API
 - [Anthropic](https://anthropic.com) - Claude models and API
 
-## Supported jq Patterns
-
-JQ-Synth works well with these common jq operations:
-
-- **Field extraction**: `.foo`, `.user.name`, `.data.items[0]`
-- **Array operations**: `.[]`, `.[0]`, `.[1:3]`, `.[-1]`
-- **Filtering**: `select(.active == true)`, `select(.age > 18)`
-- **Mapping**: `map(.name)`, `[.[] | .id]`
-- **Array construction**: `[.items[].name]`
-- **Object construction**: `{name: .user.name, email: .user.email}`
-- **Conditionals**: `if .status == "active" then .name else null end`
-- **Null handling**: `select(. != null)`, `.field // "default"`
-- **String operations**: String interpolation, concatenation
-- **Arithmetic**: Addition, subtraction, comparison operators
-- **Type checking**: `type`, `length`
-
-## Known Limitations
-
-JQ-Synth may struggle with these advanced jq features:
-
-- **Aggregations**: `group_by()`, `reduce`, `min_by()`, `max_by()`
-- **Complex recursion**: `recurse()`, `walk()`
-- **Variable bindings**: Complex `as $var` patterns
-- **Custom functions**: `def` statements (blocked for security)
-- **Advanced array operations**: `combinations()`, `transpose()`
-- **Path manipulation**: `getpath()`, `setpath()`, `delpaths()`
-- **Format strings**: `@csv`, `@json`, `@base64`
-
-For these cases, you may need to write the filter manually or break down the task into simpler steps.
-
-## How It Works
-
-JQ-Synth uses a **deterministic oracle** approach:
-
-1. **Generation**: An LLM (GPT-4, Claude, or compatible model) generates candidate jq filters based on your examples and description
-2. **Verification**: Each filter is executed against the real jq binary with your input examples
-3. **Scoring**: A deterministic algorithm compares actual vs expected outputs, computing similarity scores (0.0 to 1.0)
-4. **Feedback**: The algorithm classifies errors (syntax, shape, missing/extra elements, order) and generates actionable feedback
-5. **Refinement**: The LLM receives the feedback and generates an improved filter
-6. **Iteration**: Steps 2-5 repeat until a perfect match is found or limits are reached
-
-This hybrid approach combines LLM creativity with deterministic verification, ensuring correctness while leveraging AI for filter synthesis.
-
 ---
 
-**JQ-Synth** - Because life's too short to debug jq filters manually.
+**JQ-By-Example** - Because life's too short to debug jq filters manually.

@@ -1,5 +1,5 @@
 """
-Edge case tests for production-ready jq-synth.
+Edge case tests for production-ready jq-by-example.
 
 This module contains comprehensive edge case tests covering:
 - Null input/output handling
@@ -219,9 +219,7 @@ class TestDeeplyNested:
             description="Extract name from 3-level nested structure",
             examples=[
                 Example(
-                    input_data={
-                        "user": {"profile": {"name": "Alice", "age": 30}}
-                    },
+                    input_data={"user": {"profile": {"name": "Alice", "age": 30}}},
                     expected_output="Alice",
                 ),
             ],
@@ -241,13 +239,7 @@ class TestDeeplyNested:
             examples=[
                 Example(
                     input_data={
-                        "data": {
-                            "user": {
-                                "account": {
-                                    "settings": {"theme": "dark", "lang": "en"}
-                                }
-                            }
-                        }
+                        "data": {"user": {"account": {"settings": {"theme": "dark", "lang": "en"}}}}
                     },
                     expected_output="dark",
                 ),
@@ -493,7 +485,7 @@ class TestTypeMismatches:
     def test_mixed_types_in_array(self, orchestrator_with_mock_generator):
         """Filter should handle arrays with mixed types."""
         orchestrator, mock_gen = orchestrator_with_mock_generator
-        mock_gen.generate.return_value = "[.[] | select(type == \"number\")]"
+        mock_gen.generate.return_value = '[.[] | select(type == "number")]'
 
         task = Task(
             id="mixed-types-filter",
@@ -512,7 +504,7 @@ class TestTypeMismatches:
     def test_boolean_vs_number(self, orchestrator_with_mock_generator):
         """Filter should distinguish between boolean and number types."""
         orchestrator, mock_gen = orchestrator_with_mock_generator
-        mock_gen.generate.return_value = "[.[] | select(type == \"boolean\")]"
+        mock_gen.generate.return_value = '[.[] | select(type == "boolean")]'
 
         task = Task(
             id="boolean-filter",

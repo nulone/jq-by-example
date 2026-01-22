@@ -9,16 +9,19 @@ to provide actionable feedback for the LLM generator.
 import json
 import logging
 from collections import Counter
-from typing import Any
+from typing import Any, ClassVar
 
 from src.domain import Attempt, ErrorType, ExampleResult, Task
 from src.executor import ExecutionResult, JQExecutor
 
 logger = logging.getLogger(__name__)
 
+
 # Sentinel to distinguish parse failure from valid None/null
 class _ParseError:
     pass
+
+
 _PARSE_ERROR = _ParseError()
 
 
@@ -36,7 +39,7 @@ class AlgorithmicReviewer:
     """
 
     # Error type priority for selecting primary error (higher index = higher priority)
-    _ERROR_PRIORITY: dict[ErrorType, int] = {
+    _ERROR_PRIORITY: ClassVar[dict[ErrorType, int]] = {
         ErrorType.NONE: 0,
         ErrorType.ORDER: 1,
         ErrorType.MISSING_EXTRA: 2,
@@ -170,10 +173,17 @@ class AlgorithmicReviewer:
             stdout: The stdout from jq execution.
 
         Returns:
-            Parsed JSON value, or None if parsing fails.
+            Parsed JSON value, or _PARSE_ERROR sentinel if parsing fails.
+
+        Note:
+            Empty stdout is treated as a parse error because jq filters like 'empty'
+            produce no output, which is semantically different from outputting 'null'.
+            A filter that outputs null will produce stdout='null', which parses to None.
         """
         stdout = stdout.strip()
 
+        # Empty output is an error - jq should output at least 'null' if that's intended
+        # Filters like 'empty' or 'select(false)' produce no output, which should fail
         if not stdout:
             return _PARSE_ERROR
 
@@ -239,9 +249,7 @@ class AlgorithmicReviewer:
         # Type mismatch for scalars
         return 0.0, ErrorType.SHAPE, f"Type mismatch: expected {expected_type}, got {actual_type}"
 
-    def _analyze_list(
-        self, actual: list[Any], expected: list[Any]
-    ) -> tuple[float, ErrorType, str]:
+    def _analyze_list(self, actual: list[Any], expected: list[Any]) -> tuple[float, ErrorType, str]:
         """
         Analyze list outputs using Jaccard similarity and order detection.
 
@@ -260,7 +268,11 @@ class AlgorithmicReviewer:
             return 0.0, ErrorType.MISSING_EXTRA, f"Expected empty list but got {len(actual)} items"
 
         if not actual:
-            return 0.0, ErrorType.MISSING_EXTRA, f"Expected {len(expected)} items but got empty list"
+            return (
+                0.0,
+                ErrorType.MISSING_EXTRA,
+                f"Expected {len(expected)} items but got empty list",
+            )
 
         # Convert to comparable strings for multiset operations
         def to_str(item: Any) -> str:
@@ -290,9 +302,7 @@ class AlgorithmicReviewer:
         intersection_size = sum(
             min(actual_counter[elem], expected_counter[elem]) for elem in all_elements
         )
-        union_size = sum(
-            max(actual_counter[elem], expected_counter[elem]) for elem in all_elements
-        )
+        union_size = sum(max(actual_counter[elem], expected_counter[elem]) for elem in all_elements)
         jaccard = intersection_size / union_size if union_size else 1.0
 
         # Check for missing/extra elements (unique elements)
@@ -345,7 +355,7 @@ class AlgorithmicReviewer:
         # Calculate value score (for matching keys, how many values match)
         if key_intersection:
             matching_values = sum(1 for k in key_intersection if actual[k] == expected[k])
-            value_score = matching_values / len(key_union)
+            value_score = matching_values / len(key_intersection)
         else:
             value_score = 0.0
 

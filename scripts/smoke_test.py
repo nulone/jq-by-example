@@ -86,7 +86,7 @@ Examples:
     try:
         print("[2/3] Sending test request to API...")
         response = provider.generate(test_prompt)
-        print(f"✓ API responded successfully")
+        print("✓ API responded successfully")
         print()
 
         print("[3/3] Validating response...")

@@ -10,9 +10,11 @@ import json
 import logging
 import sys
 import time
+from difflib import get_close_matches
 from pathlib import Path
 from typing import Any
 
+from src.colors import bold, cyan, dim, error, info, success, warning
 from src.domain import Example, Solution, Task
 from src.executor import JQExecutor
 from src.generator import GenerationError, JQGenerator
@@ -62,6 +64,140 @@ def load_tasks(path: str) -> list[Task]:
 
     logger.debug("Loaded %d tasks from %s", len(tasks), path)
     return tasks
+
+
+def _format_jq_not_found_error() -> str:
+    """Format helpful error message when jq binary is not found."""
+    return f"""
+{error("⚠️  jq binary not found in your PATH")}
+
+jq-synth requires the jq command-line tool to be installed.
+
+{bold("Quick setup:")}
+  • macOS:    {info("brew install jq")}
+  • Ubuntu:   {info("sudo apt-get install jq")}
+  • Windows:  {info("choco install jq")}
+
+{bold("After installation:")}
+  1. Verify: {cyan("jq --version")}
+  2. Try again: {cyan("jq-synth --help")}
+
+{dim("Need help? https://stedolan.github.io/jq/download/")}
+"""
+
+
+def _format_api_key_error(provider: str) -> str:
+    """Format helpful error message when API key is missing."""
+    if provider == "openai":
+        return f"""
+{error("🔑 API key required")}
+
+jq-synth uses AI to generate jq filters. You need an OpenAI API key.
+
+{bold("Quick setup:")}
+  1. Sign up: {info("https://platform.openai.com")}
+  2. Create key: {info("https://platform.openai.com/api-keys")}
+  3. Set environment variable:
+     {cyan("export OPENAI_API_KEY='sk-...'")}
+
+{bold("Alternative providers:")}
+  • Anthropic: {cyan("jq-synth --provider anthropic")}
+  • Local (free): See README for Ollama setup
+
+{dim("Tip: Add the export to your ~/.bashrc or ~/.zshrc for persistence")}
+"""
+    elif provider == "anthropic":
+        return f"""
+{error("🔑 API key required")}
+
+{bold("Anthropic API setup:")}
+  1. Sign up: {info("https://console.anthropic.com")}
+  2. Create key: {info("https://console.anthropic.com/settings/keys")}
+  3. Set environment variable:
+     {cyan("export ANTHROPIC_API_KEY='sk-ant-...'")}
+
+{dim("Tip: OpenAI is the default provider: jq-synth --provider openai")}
+"""
+    else:
+        return f"{error('API key required')} for provider: {provider}"
+
+
+def _format_task_not_found_error(task_id: str, available_tasks: list[Task]) -> str:
+    """Format helpful error when task is not found."""
+    available_ids = [t.id for t in available_tasks]
+    close_matches = get_close_matches(task_id, available_ids, n=1, cutoff=0.6)
+
+    msg = f"\n{error('⚠️  Task not found:')} {bold(task_id)}\n"
+
+    if close_matches:
+        match = close_matches[0]
+        matched_task = next(t for t in available_tasks if t.id == match)
+        msg += f"\n{warning('Did you mean:')} {cyan(match)}\n"
+        msg += f"{dim(matched_task.description)}\n"
+
+    msg += f"\n{bold('Available tasks:')}\n"
+    for task in available_tasks[:5]:  # Show first 5
+        msg += f"  • {cyan(task.id):<20} {task.description[:50]}\n"
+
+    if len(available_tasks) > 5:
+        msg += f"\n{dim(f'... and {len(available_tasks) - 5} more')}\n"
+
+    msg += f"\n{dim('View all: jq-synth --list-tasks')}\n"
+
+    return msg
+
+
+def _validate_json_string(json_str: str, param_name: str) -> tuple[bool, str, Any]:
+    """
+    Validate a JSON string and provide helpful error messages.
+
+    Args:
+        json_str: The JSON string to validate.
+        param_name: Name of the parameter (for error messages).
+
+    Returns:
+        Tuple of (is_valid, error_message, parsed_data).
+    """
+    try:
+        data = json.loads(json_str)
+        return True, "", data
+    except json.JSONDecodeError as e:
+        # Build helpful error message
+        lines = json_str.split("\n")
+        error_line = lines[e.lineno - 1] if e.lineno <= len(lines) else ""
+
+        # Detect common issues
+        suggestions = []
+        if "{" in json_str and "}" not in json_str:
+            suggestions.append("Missing closing brace }")
+        if "[" in json_str and "]" not in json_str:
+            suggestions.append("Missing closing bracket ]")
+        if json_str.count('"') % 2 != 0:
+            suggestions.append('Unmatched quote "')
+        if "'" in json_str and '"' not in json_str:
+            suggestions.append("Use double quotes \" instead of single quotes '")
+
+        msg = f"""
+{error("Invalid JSON")} in --{param_name}
+
+{error("Error:")} {e.msg}
+{error("Position:")} Line {e.lineno}, Column {e.colno}
+
+{error_line}
+{" " * (e.colno - 1)}^
+
+{bold("Common issues:")}
+"""
+        for s in suggestions[:3]:  # Limit to 3 suggestions
+            msg += f"  • {s}\n"
+
+        msg += f"""
+{info("Example of valid JSON:")}
+  jq-synth -i '{{"x": 1}}' -o '1' -d 'Extract x'
+
+{dim("Tip: Use a JSON validator: https://jsonlint.com")}
+"""
+        return False, msg, None
 
 
 def _parse_args(args: list[str] | None = None) -> argparse.Namespace:
@@ -180,6 +316,13 @@ Examples:
         help="Enable debug logging (shows detailed internal state)",
     )
 
+    # Task management
+    parser.add_argument(
+        "--list-tasks",
+        action="store_true",
+        help="List all available tasks and exit",
+    )
+
     return parser.parse_args(args)
 
 
@@ -236,6 +379,16 @@ def _create_interactive_task(
     )
 
 
+def _format_score(score: float) -> str:
+    """Format score with color based on value."""
+    if score >= 0.999:  # Perfect score per domain model (Attempt.is_perfect)
+        return success(f"{score:.3f}")
+    elif score >= 0.8:
+        return warning(f"{score:.3f}")
+    else:
+        return error(f"{score:.3f}")
+
+
 def _print_solution(solution: Solution, verbose: bool = False) -> None:
     """
     Print a solution to stdout.
@@ -244,19 +397,79 @@ def _print_solution(solution: Solution, verbose: bool = False) -> None:
         solution: The solution to print.
         verbose: If True, print additional details.
     """
-    status = "✓" if solution.success else "✗"
-    print(f"\n{status} Task: {solution.task_id}")
-    print(f"  Filter: {solution.best_filter}")
-    print(f"  Score: {solution.best_score:.3f}")
+    status = success("✓") if solution.success else error("✗")
+    print(f"\n{status} Task: {bold(solution.task_id)}")
+    print(f"  Filter: {cyan(solution.best_filter)}")
+    print(f"  Score: {_format_score(solution.best_score)}")
     print(f"  Iterations: {solution.iterations_used}")
 
     if verbose and solution.history:
-        print("  History:")
+        print(f"  {dim('History:')}")
         for attempt in solution.history:
+            score_str = _format_score(attempt.aggregated_score)
             print(
-                f"    [{attempt.iteration}] score={attempt.aggregated_score:.3f} "
-                f"error={attempt.primary_error.value} filter='{attempt.filter_code}'"
+                f"    {dim(f'[{attempt.iteration}]')} score={score_str} "
+                f"error={attempt.primary_error.value} filter='{dim(attempt.filter_code)}'"
             )
+
+
+def _estimate_difficulty(task: Task) -> str:
+    """Estimate task difficulty based on heuristics."""
+    desc_lower = task.description.lower()
+
+    if any(word in desc_lower for word in ["group", "aggregate", "reduce", "sum all"]):
+        return "advanced"
+    elif any(word in desc_lower for word in ["filter", "select", "extract multiple", "skip"]):
+        return "intermediate"
+    else:
+        return "basic"
+
+
+def _list_tasks(tasks: list[Task]) -> None:
+    """
+    Display all available tasks in a formatted table.
+
+    Args:
+        tasks: List of Task objects to display.
+    """
+    print(f"\n{bold(f'Available Tasks ({len(tasks)})')}\n")
+
+    # Group by difficulty
+    basic = []
+    intermediate = []
+    advanced = []
+
+    for task in tasks:
+        difficulty = _estimate_difficulty(task)
+        if difficulty == "basic":
+            basic.append(task)
+        elif difficulty == "intermediate":
+            intermediate.append(task)
+        else:
+            advanced.append(task)
+
+    def print_group(name: str, tasks_list: list[Task]) -> None:
+        if not tasks_list:
+            return
+        print(f"{bold(name)} ({len(tasks_list)}):")
+        for task in tasks_list:
+            examples_text = f"{len(task.examples)} example"
+            if len(task.examples) != 1:
+                examples_text += "s"
+            # Truncate description if too long
+            desc = task.description[:60]
+            if len(task.description) > 60:
+                desc += "..."
+            print(f"  • {cyan(f'{task.id:<20}')} {desc} ({dim(examples_text)})")
+        print()
+
+    print_group("Basic", basic)
+    print_group("Intermediate", intermediate)
+    print_group("Advanced", advanced)
+
+    print(dim("Usage: jq-synth --task <task-id>"))
+    print(dim("Run all: jq-synth --task all"))
+    print()
 
 
 def _print_summary_table(solutions: list[Solution]) -> None:
@@ -270,7 +483,7 @@ def _print_summary_table(solutions: list[Solution]) -> None:
         return
 
     print("\n" + "=" * 60)
-    print("Summary")
+    print(bold("Summary"))
     print("=" * 60)
 
     # Header
@@ -279,14 +492,25 @@ def _print_summary_table(solutions: list[Solution]) -> None:
 
     # Rows
     for sol in solutions:
-        status = "PASS" if sol.success else "FAIL"
-        print(f"{sol.task_id:<25} {status:<10} {sol.best_score:<10.3f} {sol.iterations_used:<10}")
+        if sol.success:
+            status = success("PASS")
+        else:
+            status = error("FAIL")
+        score_str = _format_score(sol.best_score)
+        print(f"{sol.task_id:<25} {status:<20} {score_str:<20} {sol.iterations_used:<10}")
 
     # Footer
     print("-" * 60)
     passed = sum(1 for s in solutions if s.success)
     total = len(solutions)
-    print(f"Total: {passed}/{total} passed")
+    pass_rate = 100 * passed / total if total > 0 else 0
+    if passed == total:
+        summary_str = success(f"{passed}/{total} passed ({pass_rate:.0f}%)")
+    elif passed == 0:
+        summary_str = error(f"{passed}/{total} passed ({pass_rate:.0f}%)")
+    else:
+        summary_str = warning(f"{passed}/{total} passed ({pass_rate:.0f}%)")
+    print(f"Total: {summary_str}")
 
 
 def main(args: list[str] | None = None) -> int:
@@ -302,27 +526,53 @@ def main(args: list[str] | None = None) -> int:
     parsed = _parse_args(args)
     _setup_logging(parsed.verbose, parsed.debug)
 
+    # Handle --list-tasks flag
+    if parsed.list_tasks:
+        try:
+            all_tasks = load_tasks(parsed.tasks_file)
+            _list_tasks(all_tasks)
+            return 0
+        except FileNotFoundError:
+            print(error(f"Error: Tasks file not found: {parsed.tasks_file}"), file=sys.stderr)
+            return 1
+        except json.JSONDecodeError as e:
+            print(error(f"Error: Invalid JSON in tasks file: {e}"), file=sys.stderr)
+            return 1
+        except KeyError as e:
+            print(error(f"Error: Missing field in tasks file: {e}"), file=sys.stderr)
+            return 1
+
     # Determine mode: interactive or batch
     is_interactive = parsed.input is not None and parsed.output is not None
 
     if is_interactive:
-        # Interactive mode
-        try:
-            task = _create_interactive_task(
-                parsed.input,
-                parsed.output,
-                parsed.desc,
-            )
-            tasks = [task]
-        except json.JSONDecodeError as e:
-            print(f"Error: Invalid JSON in input or output: {e}", file=sys.stderr)
+        # Interactive mode with JSON validation
+        valid, err_msg, input_data = _validate_json_string(parsed.input, "input")
+        if not valid:
+            print(err_msg, file=sys.stderr)
             return 1
+
+        valid, err_msg, output_data = _validate_json_string(parsed.output, "output")
+        if not valid:
+            print(err_msg, file=sys.stderr)
+            return 1
+
+        example = Example(input_data=input_data, expected_output=output_data)
+        task = Task(id="interactive", description=parsed.desc, examples=[example])
+        tasks = [task]
     else:
         # Batch mode - need --task argument
         if not parsed.task:
             print(
-                "Error: Must specify --task or use interactive mode (--input and --output)",
+                error("Error: Must specify --task or use interactive mode (--input and --output)"),
                 file=sys.stderr,
+            )
+            print(info("\nExamples:"))
+            print(f"  {cyan('jq-synth --task nested-field')}")
+            print(
+                f"  {cyan('jq-synth -i')} "
+                + "'{\"x\": 1}' "
+                + f"{cyan('-o')} '1' {cyan('-d')} 'Extract x'\n"
             )
             return 1
 
@@ -330,13 +580,14 @@ def main(args: list[str] | None = None) -> int:
         try:
             all_tasks = load_tasks(parsed.tasks_file)
         except FileNotFoundError:
-            print(f"Error: Tasks file not found: {parsed.tasks_file}", file=sys.stderr)
+            print(error(f"Error: Tasks file not found: {parsed.tasks_file}"), file=sys.stderr)
+            print(info(f"Expected location: {Path(parsed.tasks_file).absolute()}"))
             return 1
         except json.JSONDecodeError as e:
-            print(f"Error: Invalid JSON in tasks file: {e}", file=sys.stderr)
+            print(error(f"Error: Invalid JSON in tasks file: {e}"), file=sys.stderr)
             return 1
         except KeyError as e:
-            print(f"Error: Missing field in tasks file: {e}", file=sys.stderr)
+            print(error(f"Error: Missing field in tasks file: {e}"), file=sys.stderr)
             return 1
 
         # Filter tasks
@@ -345,25 +596,32 @@ def main(args: list[str] | None = None) -> int:
         else:
             tasks = [t for t in all_tasks if t.id == parsed.task]
             if not tasks:
-                print(f"Error: Task not found: {parsed.task}", file=sys.stderr)
-                print(f"Available tasks: {[t.id for t in all_tasks]}", file=sys.stderr)
+                print(_format_task_not_found_error(parsed.task, all_tasks), file=sys.stderr)
                 return 1
 
     # Initialize components
     try:
         executor = JQExecutor()
     except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        if "jq binary not found" in str(e) or "not found in PATH" in str(e):
+            print(_format_jq_not_found_error(), file=sys.stderr)
+        else:
+            print(error(f"Error: {e}"), file=sys.stderr)
         return 1
 
     try:
         generator = JQGenerator(
             provider_type=parsed.provider,
             model=parsed.model,
-            base_url=getattr(parsed, "base_url", None),
+            base_url=parsed.base_url,
         )
     except ValueError as e:
-        print(f"Error: {e}", file=sys.stderr)
+        error_str = str(e).lower()
+        if "api key" in error_str or "api_key" in error_str:
+            provider = parsed.provider or "openai"
+            print(_format_api_key_error(provider), file=sys.stderr)
+        else:
+            print(error(f"Error: {e}"), file=sys.stderr)
         return 1
 
     reviewer = AlgorithmicReviewer(executor)
@@ -428,14 +686,23 @@ def main(args: list[str] | None = None) -> int:
     # Print overall summary
     if solutions:
         print(f"\n{'=' * 60}")
-        print("OVERALL SUMMARY")
+        print(bold("OVERALL SUMMARY"))
         print(f"{'=' * 60}")
         passed = sum(1 for s in solutions if s.success)
         total = len(solutions)
-        print(f"Tasks: {passed}/{total} passed ({100 * passed / total:.1f}%)")
-        print(f"Total time: {total_time_sec:.2f}s")
+        pass_rate = 100 * passed / total if total > 0 else 0
+
+        if passed == total:
+            tasks_str = success(f"{passed}/{total} passed ({pass_rate:.1f}%)")
+        elif passed == 0:
+            tasks_str = error(f"{passed}/{total} passed ({pass_rate:.1f}%)")
+        else:
+            tasks_str = warning(f"{passed}/{total} passed ({pass_rate:.1f}%)")
+
+        print(f"Tasks: {tasks_str}")
+        print(f"Total time: {cyan(f'{total_time_sec:.2f}s')}")
         if total_time_sec > 0:
-            print(f"Average time per task: {total_time_sec / total:.2f}s")
+            print(f"Average time per task: {cyan(f'{total_time_sec / total:.2f}s')}")
         print(f"{'=' * 60}")
 
     # Return code

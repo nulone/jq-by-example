@@ -7,13 +7,54 @@ components while implementing anti-stuck mechanisms.
 """
 
 import logging
+import sys
 from dataclasses import replace
 
+from src.colors import dim, error, success, warning
 from src.domain import Attempt, Solution, Task
 from src.generator import JQGenerator
 from src.reviewer import AlgorithmicReviewer
 
 logger = logging.getLogger(__name__)
+
+
+def _should_show_progress() -> bool:
+    """Check if progress indicator should be displayed."""
+    return sys.stdout.isatty() and not logger.isEnabledFor(logging.DEBUG)
+
+
+def _print_progress(iteration: int, max_iter: int, status: str, clear_line: bool = False) -> None:
+    """
+    Print progress indicator for current iteration.
+
+    Args:
+        iteration: Current iteration number.
+        max_iter: Maximum iterations.
+        status: Status message to display.
+        clear_line: If True, clear the line before printing.
+    """
+    if not _should_show_progress():
+        return
+
+    prefix = f"Iteration {iteration}/{max_iter}"
+    if clear_line:
+        # Clear line and return to start
+        print(f"\r{' ' * 80}\r{prefix}  {status}", end="", flush=True)
+    else:
+        print(f"\r{prefix}  {status}", end="", flush=True)
+
+
+def _print_progress_done(message: str) -> None:
+    """
+    Print final progress message and move to new line.
+
+    Args:
+        message: Final message to display.
+    """
+    if not _should_show_progress():
+        return
+
+    print(f"\r{' ' * 80}\r{message}")
 
 
 class Orchestrator:
@@ -88,12 +129,20 @@ class Orchestrator:
         for iteration in range(1, self.max_iterations + 1):
             logger.info("Iteration %d/%d", iteration, self.max_iterations)
 
+            # Show progress: generating filter
+            _print_progress(
+                iteration, self.max_iterations, "🤖 Generating filter...", clear_line=True
+            )
+
             # Generate a candidate filter
             try:
                 filter_code = self.generator.generate(task, list(history) if history else None)
             except Exception as e:
                 if verbose:
                     logger.warning("Generator failed on iteration %d: %s", iteration, e)
+                _print_progress_done(
+                    f"{error('❌')} Iteration {iteration}/{self.max_iterations} - Generation failed"
+                )
                 stagnation_counter += 1
                 if stagnation_counter >= self.stagnation_limit:
                     logger.info("Stagnation limit reached after generator failure")
@@ -104,6 +153,9 @@ class Orchestrator:
             normalized = self._normalize(filter_code)
             if normalized in seen_filters:
                 logger.debug("Duplicate filter detected: '%s'", filter_code)
+                _print_progress_done(
+                    f"{warning('⚠️')} Iteration {iteration}/{self.max_iterations} - Duplicate filter detected"
+                )
                 stagnation_counter += 1
                 if stagnation_counter >= self.stagnation_limit:
                     logger.info("Stagnation limit reached due to duplicate filters")
@@ -111,6 +163,10 @@ class Orchestrator:
                 continue
 
             seen_filters.add(normalized)
+
+            # Show progress: testing filter
+            truncated_filter = filter_code[:50] + "..." if len(filter_code) > 50 else filter_code
+            _print_progress(iteration, self.max_iterations, f"⚙️  Testing: {dim(truncated_filter)}")
 
             # Evaluate the filter
             attempt = self.reviewer.evaluate(task, filter_code)
@@ -126,6 +182,16 @@ class Orchestrator:
                 attempt.is_perfect,
                 attempt.primary_error.value,
             )
+
+            # Show progress: display score
+            if attempt.is_perfect:
+                score_display = success("✓ Score: 1.000 - Perfect match!")
+            elif attempt.aggregated_score >= 0.8:
+                score_display = warning(f"📊 Score: {attempt.aggregated_score:.3f}")
+            else:
+                score_display = error(f"📊 Score: {attempt.aggregated_score:.3f}")
+
+            _print_progress_done(f"Iteration {iteration}/{self.max_iterations}  {score_display}")
 
             # Check for perfect solution
             if attempt.is_perfect:
@@ -191,14 +257,50 @@ class Orchestrator:
         """
         Normalize a filter code for duplicate detection.
 
-        Normalization involves removing all whitespace while preserving case.
+        Normalization removes whitespace OUTSIDE of string literals, while preserving:
+        - String literal contents (spaces in "a b" are kept)
+        - Case sensitivity of jq field names
+
         This allows detecting semantically identical filters like '.foo' and '. foo'
-        while respecting case-sensitivity of jq field names.
+        while treating '.x == "a b"' and '.x == "ab"' as different filters.
 
         Args:
             filter_code: The filter code to normalize.
 
         Returns:
             Normalized filter string for comparison.
+
+        Examples:
+            >>> _normalize('.  x')
+            '.x'
+            >>> _normalize('.x == "a b"')
+            '.x=="a b"'  # Space in string literal preserved
         """
-        return "".join(filter_code.split())
+        result = []
+        in_string = False
+        escape_next = False
+
+        for char in filter_code:
+            if escape_next:
+                result.append(char)
+                escape_next = False
+                continue
+
+            if char == "\\":
+                result.append(char)
+                escape_next = True
+                continue
+
+            if char == '"':
+                in_string = not in_string
+                result.append(char)
+                continue
+
+            if in_string:
+                # Inside string literal - preserve everything including spaces
+                result.append(char)
+            elif not char.isspace():
+                # Outside string literal - skip whitespace
+                result.append(char)
+
+        return "".join(result)

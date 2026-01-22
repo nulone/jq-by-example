@@ -12,8 +12,20 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.cli import _create_interactive_task, _parse_args, load_tasks, main
-from src.domain import Task
+from src.cli import (
+    _create_interactive_task,
+    _estimate_difficulty,
+    _format_api_key_error,
+    _format_jq_not_found_error,
+    _format_score,
+    _format_task_not_found_error,
+    _parse_args,
+    _setup_logging,
+    _validate_json_string,
+    load_tasks,
+    main,
+)
+from src.domain import Solution, Task
 
 
 class TestLoadTasksValidJSON:
@@ -26,9 +38,7 @@ class TestLoadTasksValidJSON:
                 {
                     "id": "test-task",
                     "description": "Extract the name field",
-                    "examples": [
-                        {"input": {"name": "Alice"}, "expected_output": "Alice"}
-                    ],
+                    "examples": [{"input": {"name": "Alice"}, "expected_output": "Alice"}],
                 }
             ]
         }
@@ -358,9 +368,7 @@ class TestInteractiveMode:
             description="Extract user",
         )
 
-        assert task.examples[0].input_data == {
-            "user": {"name": "Alice", "roles": ["admin"]}
-        }
+        assert task.examples[0].input_data == {"user": {"name": "Alice", "roles": ["admin"]}}
         assert task.examples[0].expected_output == {
             "name": "Alice",
             "roles": ["admin"],
@@ -369,7 +377,7 @@ class TestInteractiveMode:
     def test_creates_task_with_array_input(self):
         """Interactive mode handles array input."""
         task = _create_interactive_task(
-            input_json='[1, 2, 3]',
+            input_json="[1, 2, 3]",
             output_json="6",
             description="Sum array",
         )
@@ -774,9 +782,7 @@ class TestMainMaxIters:
                 )
                 mock_orch_class.return_value = mock_orch
 
-                main(
-                    ["--task", "test", "--tasks-file", str(tasks_file), "--max-iters", "7"]
-                )
+                main(["--task", "test", "--tasks-file", str(tasks_file), "--max-iters", "7"])
 
                 call_kwargs = mock_orch_class.call_args[1]
                 assert call_kwargs["max_iterations"] == 7
@@ -939,3 +945,626 @@ class TestMainInvalidTasksFile:
         assert result == 1
         captured = capsys.readouterr()
         assert "Missing field" in captured.err
+
+
+class TestFormatJQNotFoundError:
+    """Tests for _format_jq_not_found_error function."""
+
+    def test_contains_error_symbol(self) -> None:
+        """Error message should contain warning symbol."""
+        result = _format_jq_not_found_error()
+        assert "jq binary not found" in result
+
+    def test_contains_installation_instructions(self) -> None:
+        """Error message should include platform-specific install commands."""
+        result = _format_jq_not_found_error()
+        assert "brew install jq" in result
+        assert "apt-get install jq" in result
+        assert "choco install jq" in result
+
+    def test_contains_verification_steps(self) -> None:
+        """Error message should include verification command."""
+        result = _format_jq_not_found_error()
+        assert "jq --version" in result
+
+
+class TestFormatApiKeyError:
+    """Tests for _format_api_key_error function."""
+
+    def test_openai_provider_message(self) -> None:
+        """OpenAI provider should show OpenAI-specific instructions."""
+        result = _format_api_key_error("openai")
+        assert "OpenAI" in result or "openai" in result.lower()
+        assert "OPENAI_API_KEY" in result
+        assert "platform.openai.com" in result
+
+    def test_anthropic_provider_message(self) -> None:
+        """Anthropic provider should show Anthropic-specific instructions."""
+        result = _format_api_key_error("anthropic")
+        assert "Anthropic" in result or "anthropic" in result.lower()
+        assert "ANTHROPIC_API_KEY" in result
+        assert "console.anthropic.com" in result
+
+    def test_unknown_provider_message(self) -> None:
+        """Unknown provider should show generic message."""
+        result = _format_api_key_error("unknown-provider")
+        assert "API key required" in result
+        assert "unknown-provider" in result
+
+
+class TestFormatTaskNotFoundError:
+    """Tests for _format_task_not_found_error function."""
+
+    def test_shows_task_id(self) -> None:
+        """Error message should show the invalid task ID."""
+        task = Task(id="valid", description="Test", examples=[])
+        result = _format_task_not_found_error("invalid", [task])
+        assert "invalid" in result
+
+    def test_suggests_close_match(self) -> None:
+        """Error message should suggest close matches."""
+        task = Task(id="nested-field", description="Extract nested field", examples=[])
+        result = _format_task_not_found_error("nested-fiel", [task])
+        assert "nested-field" in result
+        assert "Did you mean" in result or "mean" in result
+
+    def test_lists_available_tasks(self) -> None:
+        """Error message should list available task IDs."""
+        task1 = Task(id="task-1", description="First task", examples=[])
+        task2 = Task(id="task-2", description="Second task", examples=[])
+        result = _format_task_not_found_error("invalid", [task1, task2])
+        assert "task-1" in result
+        assert "task-2" in result
+
+    def test_limits_task_list_to_five(self) -> None:
+        """Error message should show only first 5 tasks."""
+        tasks = [Task(id=f"task-{i}", description=f"Task {i}", examples=[]) for i in range(10)]
+        result = _format_task_not_found_error("invalid", tasks)
+        assert "and 5 more" in result or "more" in result
+
+
+class TestValidateJsonString:
+    """Tests for _validate_json_string function."""
+
+    def test_valid_json_object(self) -> None:
+        """Valid JSON object should be accepted."""
+        is_valid, error, data = _validate_json_string('{"x": 1}', "input")
+        assert is_valid is True
+        assert error == ""
+        assert data == {"x": 1}
+
+    def test_valid_json_array(self) -> None:
+        """Valid JSON array should be accepted."""
+        is_valid, error, data = _validate_json_string("[1, 2, 3]", "input")
+        assert is_valid is True
+        assert error == ""
+        assert data == [1, 2, 3]
+
+    def test_valid_json_string(self) -> None:
+        """Valid JSON string should be accepted."""
+        is_valid, error, data = _validate_json_string('"hello"', "input")
+        assert is_valid is True
+        assert error == ""
+        assert data == "hello"
+
+    def test_valid_json_number(self) -> None:
+        """Valid JSON number should be accepted."""
+        is_valid, error, data = _validate_json_string("42", "output")
+        assert is_valid is True
+        assert error == ""
+        assert data == 42
+
+    def test_invalid_json_missing_brace(self) -> None:
+        """Invalid JSON with missing brace should be detected."""
+        is_valid, error, data = _validate_json_string('{"x": 1', "input")
+        assert is_valid is False
+        assert "Invalid JSON" in error
+        assert "Missing closing brace" in error
+        assert data is None
+
+    def test_invalid_json_missing_bracket(self) -> None:
+        """Invalid JSON with missing bracket should be detected."""
+        is_valid, error, data = _validate_json_string("[1, 2", "input")
+        assert is_valid is False
+        assert "Invalid JSON" in error
+        assert "Missing closing bracket" in error
+        assert data is None
+
+    def test_invalid_json_single_quotes(self) -> None:
+        """Invalid JSON with single quotes should suggest double quotes."""
+        is_valid, error, data = _validate_json_string("{'x': 1}", "input")
+        assert is_valid is False
+        assert "Invalid JSON" in error
+        assert "double quotes" in error or 'Use "' in error
+        assert data is None
+
+    def test_invalid_json_unmatched_quote(self) -> None:
+        """Invalid JSON with unmatched quote should be detected."""
+        is_valid, error, data = _validate_json_string('{"x": "hello}', "input")
+        assert is_valid is False
+        assert "Invalid JSON" in error
+        assert data is None
+
+    def test_error_message_shows_position(self) -> None:
+        """Error message should show line and column of error."""
+        is_valid, error, data = _validate_json_string('{"x": invalid}', "input")
+        assert is_valid is False
+        assert "Line" in error or "line" in error
+        assert "Column" in error or "column" in error
+        assert data is None
+
+    def test_error_message_includes_example(self) -> None:
+        """Error message should include example of valid JSON."""
+        is_valid, error, data = _validate_json_string("invalid", "input")
+        assert is_valid is False
+        assert "Example" in error or "example" in error
+        assert data is None
+
+
+class TestEstimateDifficulty:
+    """Tests for _estimate_difficulty function."""
+
+    def test_advanced_keywords(self) -> None:
+        """Tasks with advanced keywords should be marked as advanced."""
+        task = Task(id="test", description="Group by field and aggregate", examples=[])
+        assert _estimate_difficulty(task) == "advanced"
+
+    def test_intermediate_keywords(self) -> None:
+        """Tasks with intermediate keywords should be marked as intermediate."""
+        task = Task(id="test", description="Filter active users and select names", examples=[])
+        assert _estimate_difficulty(task) == "intermediate"
+
+    def test_basic_default(self) -> None:
+        """Tasks without special keywords should be marked as basic."""
+        task = Task(id="test", description="Extract the name field", examples=[])
+        assert _estimate_difficulty(task) == "basic"
+
+
+class TestFormatScore:
+    """Tests for _format_score function."""
+
+    def test_perfect_score(self) -> None:
+        """Perfect score should be formatted."""
+        result = _format_score(1.0)
+        assert "1.000" in result
+
+    def test_partial_score(self) -> None:
+        """Partial score should be formatted."""
+        result = _format_score(0.75)
+        assert "0.750" in result
+
+    def test_zero_score(self) -> None:
+        """Zero score should be formatted."""
+        result = _format_score(0.0)
+        assert "0.000" in result
+
+
+class TestSetupLogging:
+    """Tests for _setup_logging function."""
+
+    def test_debug_mode(self) -> None:
+        """Debug mode should set DEBUG level."""
+        _setup_logging(verbose=False, debug=True)
+        # Check that debug mode was set (may not be directly testable)
+        # Just ensure it runs without error
+        assert True
+
+    def test_verbose_mode(self) -> None:
+        """Verbose mode should set INFO level."""
+        _setup_logging(verbose=True, debug=False)
+
+
+class TestListTasks:
+    """Tests for _list_tasks function and --list-tasks flag."""
+
+    def test_list_tasks_function(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """_list_tasks should display tasks grouped by difficulty."""
+        from src.cli import _list_tasks
+        from src.domain import Example
+
+        tasks = [
+            Task(
+                id="basic-task",
+                description="Extract field",
+                examples=[Example(input_data={"x": 1}, expected_output=1)],
+            ),
+            Task(
+                id="filter-task",
+                description="Filter active items",
+                examples=[Example(input_data=[1, 2], expected_output=[2])],
+            ),
+            Task(
+                id="group-task",
+                description="Group by category and aggregate",
+                examples=[Example(input_data=[], expected_output=[])],
+            ),
+        ]
+
+        _list_tasks(tasks)
+
+        captured = capsys.readouterr()
+        assert "Available Tasks" in captured.out
+        assert "basic-task" in captured.out
+        assert "filter-task" in captured.out
+        assert "group-task" in captured.out
+        assert "Basic" in captured.out
+        assert "Intermediate" in captured.out
+        assert "Advanced" in captured.out
+
+    def test_list_tasks_with_long_description(self, capsys: pytest.CaptureFixture) -> None:
+        """_list_tasks should truncate long descriptions."""
+        from src.cli import _list_tasks
+        from src.domain import Example
+
+        tasks = [
+            Task(
+                id="long-desc",
+                description="A" * 100,  # Very long description
+                examples=[Example(input_data={}, expected_output={})],
+            ),
+        ]
+
+        _list_tasks(tasks)
+
+        captured = capsys.readouterr()
+        # Should be truncated to 60 chars + "..."
+        assert "..." in captured.out
+
+    def test_list_tasks_single_example(self, capsys: pytest.CaptureFixture) -> None:
+        """_list_tasks should handle singular 'example' correctly."""
+        from src.cli import _list_tasks
+        from src.domain import Example
+
+        tasks = [
+            Task(
+                id="single",
+                description="Test",
+                examples=[Example(input_data={}, expected_output={})],
+            ),
+        ]
+
+        _list_tasks(tasks)
+
+        captured = capsys.readouterr()
+        assert "1 example" in captured.out
+        assert "1 examples" not in captured.out
+
+    def test_list_tasks_multiple_examples(self, capsys: pytest.CaptureFixture) -> None:
+        """_list_tasks should handle plural 'examples' correctly."""
+        from src.cli import _list_tasks
+        from src.domain import Example
+
+        tasks = [
+            Task(
+                id="multiple",
+                description="Test",
+                examples=[
+                    Example(input_data={}, expected_output={}),
+                    Example(input_data={}, expected_output={}),
+                ],
+            ),
+        ]
+
+        _list_tasks(tasks)
+
+        captured = capsys.readouterr()
+        assert "2 examples" in captured.out
+
+
+class TestMainListTasksFlag:
+    """Tests for main() with --list-tasks flag."""
+
+    def test_list_tasks_flag_success(self, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+        """--list-tasks should display tasks and return 0."""
+        tasks_data = {
+            "tasks": [
+                {
+                    "id": "test",
+                    "description": "Test task",
+                    "examples": [{"input": {}, "expected_output": {}}],
+                }
+            ]
+        }
+        tasks_file = tmp_path / "tasks.json"
+        tasks_file.write_text(json.dumps(tasks_data))
+
+        result = main(["--list-tasks", "--tasks-file", str(tasks_file)])
+
+        assert result == 0
+        captured = capsys.readouterr()
+        assert "Available Tasks" in captured.out
+        assert "test" in captured.out
+
+    def test_list_tasks_with_missing_file(self, capsys: pytest.CaptureFixture) -> None:
+        """--list-tasks with missing file should return 1."""
+        result = main(["--list-tasks", "--tasks-file", "/nonexistent/file.json"])
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "not found" in captured.err
+
+    def test_list_tasks_with_invalid_json(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """--list-tasks with invalid JSON should return 1."""
+        tasks_file = tmp_path / "invalid.json"
+        tasks_file.write_text("{ invalid json")
+
+        result = main(["--list-tasks", "--tasks-file", str(tasks_file)])
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Invalid JSON" in captured.err or "json" in captured.err.lower()
+
+    def test_list_tasks_with_missing_field(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture
+    ) -> None:
+        """--list-tasks with missing field should return 1."""
+        tasks_data = {"wrong_key": []}
+        tasks_file = tmp_path / "missing_field.json"
+        tasks_file.write_text(json.dumps(tasks_data))
+
+        result = main(["--list-tasks", "--tasks-file", str(tasks_file)])
+
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "Missing field" in captured.err or "field" in captured.err.lower()
+
+
+class TestPrintSummaryTable:
+    """Tests for _print_summary_table function."""
+
+    def test_all_passed(self, capsys: pytest.CaptureFixture) -> None:
+        """Summary should show success when all tasks pass."""
+        from src.cli import _print_summary_table
+
+        solutions = [
+            Solution(
+                task_id="task1",
+                success=True,
+                best_filter=".x",
+                best_score=1.0,
+                iterations_used=1,
+                history=[],
+            ),
+            Solution(
+                task_id="task2",
+                success=True,
+                best_filter=".y",
+                best_score=1.0,
+                iterations_used=1,
+                history=[],
+            ),
+        ]
+
+        _print_summary_table(solutions)
+
+        captured = capsys.readouterr()
+        assert "2/2 passed (100%)" in captured.out
+
+    def test_all_failed(self, capsys: pytest.CaptureFixture) -> None:
+        """Summary should show error when all tasks fail."""
+        from src.cli import _print_summary_table
+
+        # Need at least 2 solutions for summary table to print
+        solutions = [
+            Solution(
+                task_id="task1",
+                success=False,
+                best_filter="",
+                best_score=0.0,
+                iterations_used=1,
+                history=[],
+            ),
+            Solution(
+                task_id="task2",
+                success=False,
+                best_filter="",
+                best_score=0.0,
+                iterations_used=1,
+                history=[],
+            ),
+        ]
+
+        _print_summary_table(solutions)
+
+        captured = capsys.readouterr()
+        assert "0/2 passed (0%)" in captured.out
+
+    def test_partial_success(self, capsys: pytest.CaptureFixture) -> None:
+        """Summary should show warning when some tasks fail."""
+        from src.cli import _print_summary_table
+
+        solutions = [
+            Solution(
+                task_id="task1",
+                success=True,
+                best_filter=".x",
+                best_score=1.0,
+                iterations_used=1,
+                history=[],
+            ),
+            Solution(
+                task_id="task2",
+                success=False,
+                best_filter="",
+                best_score=0.5,
+                iterations_used=1,
+                history=[],
+            ),
+        ]
+
+        _print_summary_table(solutions)
+
+        captured = capsys.readouterr()
+        assert "1/2 passed (50%)" in captured.out
+
+
+class TestFormatScore:
+    """Tests for _format_score function with different values."""
+
+    def test_format_perfect_score(self) -> None:
+        """Perfect score should be formatted."""
+        from src.cli import _format_score
+
+        result = _format_score(1.0)
+        assert "1.000" in result
+
+    def test_format_high_score(self) -> None:
+        """High score should be formatted."""
+        from src.cli import _format_score
+
+        result = _format_score(0.85)
+        assert "0.850" in result
+
+    def test_format_low_score(self) -> None:
+        """Low score should be formatted."""
+        from src.cli import _format_score
+
+        result = _format_score(0.25)
+        assert "0.250" in result
+
+    def test_format_zero_score(self) -> None:
+        """Zero score should be formatted."""
+        from src.cli import _format_score
+
+        result = _format_score(0.0)
+        assert "0.000" in result
+
+    def test_format_near_perfect_score(self) -> None:
+        """Score >= 0.999 should be treated as perfect (regression test)."""
+        from src.cli import _format_score
+        from src.colors import success, warning
+
+        # Test exact 0.999 - should be treated as perfect
+        result = _format_score(0.999)
+        assert "0.999" in result
+        # Should use success color (green) not warning
+        expected = success("0.999")
+        assert result == expected
+
+        # Test slightly below 0.999 - should NOT be perfect
+        result_below = _format_score(0.998)
+        assert "0.998" in result_below
+        # Should use warning color (yellow) not success
+        expected_warning = warning("0.998")
+        assert result_below == expected_warning
+
+
+class TestPrintTaskResult:
+    """Tests for _print_solution function."""
+
+    def test_print_result_without_verbose(self, capsys: pytest.CaptureFixture) -> None:
+        """Task result should be printed without history when not verbose."""
+        from src.cli import _print_solution
+        from src.domain import Attempt, ErrorType, ExampleResult
+
+        solution = Solution(
+            task_id="test",
+            success=True,
+            best_filter=".x",
+            best_score=1.0,
+            iterations_used=3,
+            history=[
+                Attempt(
+                    iteration=0,
+                    filter_code=".y",
+                    aggregated_score=0.0,
+                    primary_error=ErrorType.SHAPE,
+                    example_results=[
+                        ExampleResult(
+                            expected_output=1,
+                            actual_output=None,
+                            score=0.0,
+                            error_type=ErrorType.SHAPE,
+                            feedback="Wrong",
+                        )
+                    ],
+                )
+            ],
+        )
+
+        _print_solution(solution, verbose=False)
+
+        captured = capsys.readouterr()
+        assert "test" in captured.out
+        assert ".x" in captured.out
+        assert "1.000" in captured.out
+        # History should NOT be shown
+        assert "History" not in captured.out
+
+    def test_print_result_with_verbose(self, capsys: pytest.CaptureFixture) -> None:
+        """Task result should include history when verbose."""
+        from src.cli import _print_solution
+        from src.domain import Attempt, ErrorType, ExampleResult
+
+        solution = Solution(
+            task_id="test",
+            success=True,
+            best_filter=".x",
+            best_score=1.0,
+            iterations_used=2,
+            history=[
+                Attempt(
+                    iteration=0,
+                    filter_code=".y",
+                    aggregated_score=0.5,
+                    primary_error=ErrorType.SHAPE,
+                    example_results=[
+                        ExampleResult(
+                            expected_output=1,
+                            actual_output=None,
+                            score=0.5,
+                            error_type=ErrorType.SHAPE,
+                            feedback="Wrong",
+                        )
+                    ],
+                ),
+                Attempt(
+                    iteration=1,
+                    filter_code=".x",
+                    aggregated_score=1.0,
+                    primary_error=ErrorType.NONE,
+                    example_results=[
+                        ExampleResult(
+                            expected_output=1,
+                            actual_output=1,
+                            score=1.0,
+                            error_type=ErrorType.NONE,
+                            feedback="",
+                        )
+                    ],
+                ),
+            ],
+        )
+
+        _print_solution(solution, verbose=True)
+
+        captured = capsys.readouterr()
+        # History SHOULD be shown
+        assert "History" in captured.out or "[0]" in captured.out or "[1]" in captured.out
+
+
+class TestVerboseOutput:
+    """Tests for verbose flag behavior."""
+
+    def test_parse_verbose_flag(self) -> None:
+        """Verbose flag should be parsed correctly."""
+        from src.cli import _parse_args
+
+        args = _parse_args(["--task", "test", "--verbose"])
+        assert args.verbose is True
+
+    def test_parse_verbose_short_flag(self) -> None:
+        """Short verbose flag should be parsed correctly."""
+        from src.cli import _parse_args
+
+        args = _parse_args(["--task", "test", "-v"])
+        assert args.verbose is True
+
+    def test_verbose_default_false(self) -> None:
+        """Verbose should default to False."""
+        from src.cli import _parse_args
+
+        args = _parse_args(["--task", "test"])
+        assert args.verbose is False

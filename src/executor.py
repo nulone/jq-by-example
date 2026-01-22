@@ -14,6 +14,8 @@ from typing import Any
 
 from src.domain import ExecutionResult
 
+__all__ = ["ExecutionResult", "JQExecutor"]
+
 logger = logging.getLogger(__name__)
 
 

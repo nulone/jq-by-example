@@ -130,9 +130,9 @@ class TestExtractQuoteRemoval:
         """Mismatched quotes are preserved (not stripped)."""
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
             generator = JQGenerator()
-            result = generator._extract('".foo\'')
+            result = generator._extract("\".foo'")
             # Mismatched quotes should not be stripped
-            assert result == '".foo\''
+            assert result == "\".foo'"
 
     def test_removes_quotes_after_jq_prefix(self):
         """Quotes are removed after jq prefix is stripped."""
@@ -225,7 +225,7 @@ class TestExtractComplexCases:
         """Complex filter expressions are preserved correctly."""
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
             generator = JQGenerator()
-            complex_filter = '[.[] | select(.active == true) | {name: .name, id: .id}]'
+            complex_filter = "[.[] | select(.active == true) | {name: .name, id: .id}]"
             result = generator._extract(complex_filter)
             assert result == complex_filter
 
@@ -235,6 +235,92 @@ class TestExtractComplexCases:
             generator = JQGenerator()
             result = generator._extract(".items | map(.x) | add")
             assert result == ".items | map(.x) | add"
+
+
+class TestExtractIntroductoryPhraseRemoval:
+    """Regression tests for removing introductory phrases from LLM responses."""
+
+    def test_removes_here_is_the_filter(self):
+        """Removes 'Here is the filter:' prefix."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            result = generator._extract("Here is the filter: .user.name")
+            assert result == ".user.name"
+
+    def test_removes_here_is_the_jq_filter(self):
+        """Removes 'Here is the jq filter:' prefix."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            result = generator._extract("Here is the jq filter: .items[]")
+            assert result == ".items[]"
+
+    def test_removes_the_filter_is(self):
+        """Removes 'The filter is:' prefix."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            result = generator._extract("The filter is: .data.id")
+            assert result == ".data.id"
+
+    def test_removes_the_jq_filter_is(self):
+        """Removes 'The jq filter is:' prefix."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            result = generator._extract("The jq filter is: .x + .y")
+            assert result == ".x + .y"
+
+    def test_removes_filter_colon(self):
+        """Removes 'Filter:' prefix."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            result = generator._extract("Filter: .status")
+            assert result == ".status"
+
+    def test_removes_jq_filter_colon(self):
+        """Removes 'jq filter:' prefix."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            result = generator._extract("jq filter: .enabled")
+            assert result == ".enabled"
+
+    def test_case_insensitive_removal(self):
+        """Phrase removal is case insensitive."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            result = generator._extract("HERE IS THE FILTER: .name")
+            assert result == ".name"
+
+    def test_preserves_filter_content(self):
+        """Filter content is not modified during prefix removal."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            # Complex filter with spaces and special chars
+            result = generator._extract(
+                'Here is the filter: [.[] | select(.type == "active") | .id]'
+            )
+            assert result == '[.[] | select(.type == "active") | .id]'
+
+    def test_only_removes_one_prefix(self):
+        """Only the first matching prefix is removed."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            # If filter itself contains "filter:", it should be preserved
+            result = generator._extract("Filter: .filter")
+            assert result == ".filter"
+
+    def test_multiline_with_prefix_on_separate_line(self):
+        """Prefix on separate line is skipped, filter on next line is extracted."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            # When prefix is on its own line, it should be skipped
+            result = generator._extract("Here is the filter:\n.user.name")
+            assert result == ".user.name"
+
+    def test_multiline_with_short_prefix(self):
+        """Short prefix on separate line is handled correctly."""
+        with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}):
+            generator = JQGenerator()
+            result = generator._extract("Filter:\n.data[].id")
+            assert result == ".data[].id"
 
 
 class TestBuildPromptExamples:
@@ -560,9 +646,7 @@ class TestGenerateWithMockedAPI:
             )
 
             mock_response = MagicMock()
-            mock_response.json.return_value = {
-                "choices": [{"message": {"content": ".name"}}]
-            }
+            mock_response.json.return_value = {"choices": [{"message": {"content": ".name"}}]}
             mock_response.raise_for_status = MagicMock()
 
             with patch("httpx.Client") as mock_client_class:
@@ -686,9 +770,7 @@ class TestGenerateWithMockedAPI:
         )
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": ".test"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": ".test"}}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.Client") as mock_client_class:
@@ -715,9 +797,7 @@ class TestGenerateWithMockedAPI:
         )
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": ".x"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": ".x"}}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.Client") as mock_client_class:
@@ -794,9 +874,7 @@ class TestGenerateWithMockedAPI:
             ]
 
             mock_response = MagicMock()
-            mock_response.json.return_value = {
-                "choices": [{"message": {"content": ".x"}}]
-            }
+            mock_response.json.return_value = {"choices": [{"message": {"content": ".x"}}]}
             mock_response.raise_for_status = MagicMock()
 
             with patch("httpx.Client") as mock_client_class:
@@ -821,27 +899,35 @@ class TestSystemPrompt:
     def test_system_prompt_forbids_markdown(self):
         """System prompt instructs not to use markdown."""
         from src.providers import LLMProvider
+
         assert "NOT" in LLMProvider.SYSTEM_PROMPT
-        assert "markdown" in LLMProvider.SYSTEM_PROMPT.lower() or "backtick" in LLMProvider.SYSTEM_PROMPT.lower()
+        assert (
+            "markdown" in LLMProvider.SYSTEM_PROMPT.lower()
+            or "backtick" in LLMProvider.SYSTEM_PROMPT.lower()
+        )
 
     def test_system_prompt_forbids_jq_prefix(self):
         """System prompt instructs not to prefix with 'jq '."""
         from src.providers import LLMProvider
+
         assert "jq " in LLMProvider.SYSTEM_PROMPT
 
     def test_system_prompt_forbids_env_vars(self):
         """System prompt forbids $ENV usage."""
         from src.providers import LLMProvider
+
         assert "$ENV" in LLMProvider.SYSTEM_PROMPT
 
     def test_system_prompt_forbids_def_statements(self):
         """System prompt forbids def statements."""
         from src.providers import LLMProvider
+
         assert "def" in LLMProvider.SYSTEM_PROMPT.lower()
 
     def test_system_prompt_requests_filter_only(self):
         """System prompt requests only the filter expression."""
         from src.providers import LLMProvider
+
         assert "ONLY" in LLMProvider.SYSTEM_PROMPT
 
 

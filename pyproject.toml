@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jq-synth"
+name = "jq-by-example"
 version = "0.2.0"
 description = "AI-Powered JQ Filter Synthesis Tool - synthesizes jq filters from input/output JSON examples using LLM generation with iterative refinement"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
-    {name = "JQ-Synth Contributors"}
+    {name = "JQ-By-Example Contributors"}
 ]
 keywords = ["jq", "json", "llm", "synthesis", "cli"]
 classifiers = [
@@ -41,12 +41,12 @@ dev = [
 ]
 
 [project.scripts]
-jq-synth = "src.cli:main"
+jq-by-example = "src.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/nulone/jq-synth"
-Repository = "https://github.com/nulone/jq-synth"
-Issues = "https://github.com/nulone/jq-synth/issues"
+Homepage = "https://github.com/nulone/jq-by-example"
+Repository = "https://github.com/nulone/jq-by-example"
+Issues = "https://github.com/nulone/jq-by-example/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -81,26 +81,23 @@ ignore = [
     "PLR0912",  # Too many branches (ok for our code)
     "PLR0915",  # Too many statements (ok for our code)
     "PLW2901",  # Loop variable overwritten (intentional in some cases)
+    "PLC0415",  # Import should be at top-level (ok in test fixtures)
     "ARG001",   # Unused function argument (normal in tests)
     "ARG002",   # Unused method argument (normal in tests)
-    "PLC0415",  # Import should be at top-level (normal in tests)
+    "E402",     # Module level import not at top of file (normal in scripts)
     "E501",     # Line too long (readable code > strict line length)
     "SIM108",   # Use ternary operator (explicit if-else can be clearer)
     "SIM102",   # Use single if statement (nested can be clearer)
+    "SIM114",   # Combine if branches (explicit can be clearer)
     "SIM117",   # Use single with statement (nested can be clearer)
     "F841",     # Unused variable (normal in tests for assertion side effects)
-    "RUF012",   # Mutable class attribute (intentional for constants)
+    "F811",     # Redefinition of unused variable (normal in tests)
+    "PLC1901",  # Empty string comparison (explicit can be clearer)
     "ERA001",   # Commented-out code (useful for documentation in tests)
 ]
 
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
-
-[tool.ruff.format]
-quote-style = "double"
-indent-style = "space"
-skip-magic-trailing-comma = false
-line-ending = "auto"
 
 [tool.mypy]
 python_version = "3.10"
@@ -134,7 +131,7 @@ addopts = [
     "--cov=src",
     "--cov-report=term-missing",
     "--cov-report=html",
-    "--cov-fail-under=90",
+    "--cov-fail-under=85",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",

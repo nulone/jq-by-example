@@ -429,7 +429,7 @@ class TestComplexFilters:
 
     def test_conditional_expression(self, executor: JQExecutor):
         """If-then-else expression works."""
-        result = executor.run("if . > 5 then \"big\" else \"small\" end", 10)
+        result = executor.run('if . > 5 then "big" else "small" end', 10)
 
         assert result.is_success is True
         assert result.stdout == '"big"'
@@ -443,7 +443,7 @@ class TestComplexFilters:
 
     def test_string_concatenation(self, executor: JQExecutor):
         """String concatenation works."""
-        result = executor.run(".first + \" \" + .last", {"first": "John", "last": "Doe"})
+        result = executor.run('.first + " " + .last', {"first": "John", "last": "Doe"})
 
         assert result.is_success is True
         assert result.stdout == '"John Doe"'

@@ -234,7 +234,11 @@ class TestMissingKeys:
         task = make_task({"a": 1}, {"a": 1, "b": 2, "c": 3, "d": 4})
         attempt = reviewer.evaluate(task, ".")
 
-        assert 0.0 < attempt.aggregated_score < 0.5
+        # Score formula: (key_score + value_score) / 2
+        # key_score = 1/4 = 0.25 (Jaccard of keys)
+        # value_score = 1/1 = 1.0 (matching values for intersection keys)
+        # combined = (0.25 + 1.0) / 2 = 0.625
+        assert 0.6 < attempt.aggregated_score < 0.7
         assert attempt.primary_error == ErrorType.MISSING_EXTRA
 
     def test_missing_keys_feedback(
@@ -274,7 +278,11 @@ class TestExtraKeys:
         task = make_task({"a": 1, "b": 2, "c": 3, "d": 4}, {"a": 1})
         attempt = reviewer.evaluate(task, ".")
 
-        assert 0.0 < attempt.aggregated_score < 0.5
+        # Score formula: (key_score + value_score) / 2
+        # key_score = 1/4 = 0.25 (Jaccard of keys)
+        # value_score = 1/1 = 1.0 (matching values for intersection keys)
+        # combined = (0.25 + 1.0) / 2 = 0.625
+        assert 0.6 < attempt.aggregated_score < 0.7
         assert attempt.primary_error == ErrorType.MISSING_EXTRA
 
     def test_extra_keys_feedback(
@@ -698,10 +706,7 @@ class TestAttemptProperties:
         reviewer: AlgorithmicReviewer,
     ):
         """Number of ExampleResults matches number of examples in task."""
-        examples = [
-            Example(input_data={"x": i}, expected_output=i)
-            for i in range(5)
-        ]
+        examples = [Example(input_data={"x": i}, expected_output=i) for i in range(5)]
         task = Task(id="five-examples", description="Test", examples=examples)
 
         attempt = reviewer.evaluate(task, ".x")

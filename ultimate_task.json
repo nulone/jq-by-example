@@ -1,0 +1,25 @@
+{
+  "tasks": [
+    {
+      "id": "shortest-path",
+      "description": "Find shortest path in weighted graph from node A to node D",
+      "examples": [
+        {
+          "input": {
+            "nodes": ["A","B","C","D"],
+            "edges": [
+              {"from":"A","to":"B","weight":1},
+              {"from":"A","to":"C","weight":4},
+              {"from":"B","to":"C","weight":2},
+              {"from":"B","to":"D","weight":5},
+              {"from":"C","to":"D","weight":1}
+            ],
+            "start": "A",
+            "end": "D"
+          },
+          "expected_output": {"path":["A","B","C","D"],"cost":4}
+        }
+      ]
+    }
+  ]
+}

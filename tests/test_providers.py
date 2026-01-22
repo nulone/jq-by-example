@@ -73,7 +73,9 @@ class TestOpenAIProviderInit:
 
     def test_reads_base_url_from_env(self):
         """Reads base URL from LLM_BASE_URL environment variable."""
-        with patch.dict(os.environ, {"OPENAI_API_KEY": "key", "LLM_BASE_URL": "https://env.api/v1"}):
+        with patch.dict(
+            os.environ, {"OPENAI_API_KEY": "key", "LLM_BASE_URL": "https://env.api/v1"}
+        ):
             provider = OpenAIProvider()
             assert provider.base_url == "https://env.api/v1"
 
@@ -130,9 +132,7 @@ class TestOpenAIProviderGenerate:
         provider = OpenAIProvider(api_key="test-key")
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": ".foo"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": ".foo"}}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.Client") as mock_client_class:
@@ -151,9 +151,7 @@ class TestOpenAIProviderGenerate:
         provider = OpenAIProvider(api_key="test-api-key")
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": ".test"}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": ".test"}}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.Client") as mock_client_class:
@@ -178,9 +176,7 @@ class TestAnthropicProviderGenerate:
         provider = AnthropicProvider(api_key="test-key")
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "content": [{"text": ".bar"}]
-        }
+        mock_response.json.return_value = {"content": [{"text": ".bar"}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.Client") as mock_client_class:
@@ -199,9 +195,7 @@ class TestAnthropicProviderGenerate:
         provider = AnthropicProvider(api_key="test-api-key")
 
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "content": [{"text": ".test"}]
-        }
+        mock_response.json.return_value = {"content": [{"text": ".test"}]}
         mock_response.raise_for_status = MagicMock()
 
         with patch("httpx.Client") as mock_client_class:
@@ -257,7 +251,7 @@ class TestCreateProvider:
             provider_type="openai",
             api_key="test-key",
             model="custom-model",
-            base_url="https://custom.api/v1"
+            base_url="https://custom.api/v1",
         )
         assert provider.api_key == "test-key"
         assert provider.model == "custom-model"
@@ -273,9 +267,7 @@ class TestOpenAIProviderErrorHandling:
 
         mock_response = MagicMock()
         mock_response.status_code = 401
-        mock_response.json.return_value = {
-            "error": {"message": "Invalid API key"}
-        }
+        mock_response.json.return_value = {"error": {"message": "Invalid API key"}}
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "401 Unauthorized", request=MagicMock(), response=mock_response
         )
@@ -296,9 +288,7 @@ class TestOpenAIProviderErrorHandling:
 
         mock_response = MagicMock()
         mock_response.status_code = 400
-        mock_response.json.return_value = {
-            "error": "Bad request"
-        }
+        mock_response.json.return_value = {"error": "Bad request"}
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "400 Bad Request", request=MagicMock(), response=mock_response
         )
@@ -392,9 +382,7 @@ class TestAnthropicProviderErrorHandling:
 
         mock_response = MagicMock()
         mock_response.status_code = 401
-        mock_response.json.return_value = {
-            "error": {"message": "Invalid API key"}
-        }
+        mock_response.json.return_value = {"error": {"message": "Invalid API key"}}
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "401 Unauthorized", request=MagicMock(), response=mock_response
         )
@@ -415,9 +403,7 @@ class TestAnthropicProviderErrorHandling:
 
         mock_response = MagicMock()
         mock_response.status_code = 400
-        mock_response.json.return_value = {
-            "error": "Bad request"
-        }
+        mock_response.json.return_value = {"error": "Bad request"}
         mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "400 Bad Request", request=MagicMock(), response=mock_response
         )

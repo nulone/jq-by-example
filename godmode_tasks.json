@@ -1,0 +1,37 @@
+{
+  "tasks": [
+    {
+      "id": "levenshtein-edits",
+      "description": "Calculate edit distance and return the actual edit operations",
+      "examples": [
+        {
+          "input": {"from": "kitten", "to": "sitting"},
+          "expected_output": {"distance": 3, "edits": ["substitute k->s", "substitute e->i", "insert g"]}
+        }
+      ]
+    },
+    {
+      "id": "expression-eval",
+      "description": "Evaluate math expression string with operator precedence",
+      "examples": [
+        {"input": "2+3*4", "expected_output": 14},
+        {"input": "(2+3)*4", "expected_output": 20},
+        {"input": "10-2*3+4", "expected_output": 8}
+      ]
+    },
+    {
+      "id": "sudoku-valid",
+      "description": "Check if partial sudoku board is valid (0 = empty)",
+      "examples": [
+        {
+          "input": [[5,3,0,0,7,0,0,0,0],[6,0,0,1,9,5,0,0,0],[0,9,8,0,0,0,0,6,0],[8,0,0,0,6,0,0,0,3],[4,0,0,8,0,3,0,0,1],[7,0,0,0,2,0,0,0,6],[0,6,0,0,0,0,2,8,0],[0,0,0,4,1,9,0,0,5],[0,0,0,0,8,0,0,7,9]],
+          "expected_output": true
+        },
+        {
+          "input": [[5,3,0,0,7,0,0,0,0],[6,0,0,1,9,5,0,0,0],[0,9,8,0,0,0,0,6,0],[8,0,0,0,6,0,0,0,3],[4,0,0,8,5,3,0,0,1],[7,0,0,0,2,0,0,0,6],[0,6,0,0,0,0,2,8,0],[0,0,0,4,1,9,0,0,5],[0,0,0,0,8,0,0,7,9]],
+          "expected_output": false
+        }
+      ]
+    }
+  ]
+}
